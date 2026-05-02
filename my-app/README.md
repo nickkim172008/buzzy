@@ -2,6 +2,16 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Create a `.env.local` file from `.env.local.example` and fill it with your Firebase web app config:
+
+```bash
+cp .env.local.example .env.local
+```
+
+In Firebase Console, enable Authentication > Sign-in method > Google. Add `localhost` to Authentication > Settings > Authorized domains if it is not already there.
+
+Create a Cloud Firestore database in Firebase Console. Start in production mode, then paste the rules from `firestore.rules` into Firestore > Rules and publish them. The app stores each user's coin balance at `users/{uid}` with an initial value of `0`.
+
 First, run the development server:
 
 ```bash

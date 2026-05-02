@@ -1,0 +1,118 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          "coins",
+          "displayName",
+          "email",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.coins is number
+        && request.resource.data.coins >= 0;
+
+      match /holdings/{marketId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+
+        allow write: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly([
+            "quantity",
+            "averagePrice",
+            "updatedAt"
+          ])
+          && request.resource.data.quantity is number
+          && request.resource.data.quantity >= 0
+          && request.resource.data.averagePrice is number
+          && request.resource.data.averagePrice >= 0;
+      }
+    }
+
+    match /markets/{marketId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          "name",
+          "category",
+          "level",
+          "volatility",
+          "lastPrice",
+          "previousPrice",
+          "volume",
+          "supply",
+          "description",
+          "signal",
+          "color",
+          "createdBy",
+          "createdByName",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.category is string
+        && request.resource.data.level in ["admin", "community", "private"]
+        && request.resource.data.lastPrice is number
+        && request.resource.data.previousPrice is number
+        && request.resource.data.volume is number
+        && request.resource.data.createdBy is string;
+    }
+
+    match /orders/{orderId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          "assetId",
+          "userId",
+          "user",
+          "side",
+          "limitPrice",
+          "quantity",
+          "remaining",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.assetId is string
+        && request.resource.data.userId is string
+        && request.resource.data.user is string
+        && request.resource.data.side in ["buy", "sell"]
+        && request.resource.data.limitPrice is number
+        && request.resource.data.limitPrice >= 1
+        && request.resource.data.quantity is number
+        && request.resource.data.quantity >= 1
+        && request.resource.data.remaining is number
+        && request.resource.data.remaining >= 0
+        && request.resource.data.status in ["open", "filled", "partially_filled"];
+    }
+
+    match /trades/{tradeId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          "assetId",
+          "buyerId",
+          "buyer",
+          "sellerId",
+          "seller",
+          "price",
+          "quantity",
+          "createdAt"
+        ])
+        && request.resource.data.assetId is string
+        && request.resource.data.buyerId is string
+        && request.resource.data.buyer is string
+        && request.resource.data.sellerId is string
+        && request.resource.data.seller is string
+        && request.resource.data.price is number
+        && request.resource.data.price >= 1
+        && request.resource.data.quantity is number
+        && request.resource.data.quantity >= 1;
+    }
+  }
+}
