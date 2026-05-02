@@ -12,6 +12,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import { firebaseConfigIsReady, getFirebaseAuth, getFirebaseDb, googleProvider } from "@/lib/firebase";
@@ -802,15 +803,11 @@ export default function Home() {
     }
 
     try {
-      await setDoc(
-        doc(db, "suggestions", suggestion.id),
-        {
-          upvotes: suggestion.upvotes + 1,
-          voters: { ...suggestion.voters, [authUser.uid]: true },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await updateDoc(doc(db, "suggestions", suggestion.id), {
+        upvotes: suggestion.upvotes + 1,
+        [`voters.${authUser.uid}`]: true,
+        updatedAt: serverTimestamp(),
+      });
 
       setSuggestions((current) =>
         current.map((item) =>
