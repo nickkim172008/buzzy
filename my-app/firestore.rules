@@ -36,6 +36,7 @@ service cloud.firestore {
 
     match /markets/{marketId} {
       allow read: if request.auth != null;
+      allow delete: if request.auth != null;
       allow create, update: if request.auth != null
         && request.resource.data.keys().hasOnly([
           "name",
@@ -49,6 +50,10 @@ service cloud.firestore {
           "description",
           "signal",
           "color",
+          "totalSupply",
+          "dropPrice",
+          "remainingDropSupply",
+          "status",
           "createdBy",
           "createdByName",
           "createdAt",
@@ -60,11 +65,19 @@ service cloud.firestore {
         && request.resource.data.lastPrice is number
         && request.resource.data.previousPrice is number
         && request.resource.data.volume is number
+        && request.resource.data.totalSupply is number
+        && request.resource.data.totalSupply >= 1
+        && request.resource.data.dropPrice is number
+        && request.resource.data.dropPrice >= 1
+        && request.resource.data.remainingDropSupply is number
+        && request.resource.data.remainingDropSupply >= 0
+        && request.resource.data.status in ["drop", "trading"]
         && request.resource.data.createdBy is string;
     }
 
     match /orders/{orderId} {
       allow read: if request.auth != null;
+      allow delete: if request.auth != null;
       allow create, update: if request.auth != null
         && request.resource.data.keys().hasOnly([
           "assetId",
@@ -93,6 +106,7 @@ service cloud.firestore {
 
     match /trades/{tradeId} {
       allow read: if request.auth != null;
+      allow delete: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.keys().hasOnly([
           "assetId",

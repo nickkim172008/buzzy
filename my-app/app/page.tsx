@@ -6,6 +6,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -16,6 +17,7 @@ import {
 import { firebaseConfigIsReady, getFirebaseAuth, getFirebaseDb, googleProvider } from "@/lib/firebase";
 
 type MarketLevel = "admin" | "community" | "private";
+type MarketStatus = "drop" | "trading";
 type Side = "buy" | "sell";
 type OrderStatus = "open" | "filled" | "partially_filled";
 
@@ -32,6 +34,10 @@ type Asset = {
   description: string;
   signal: string;
   color: string;
+  totalSupply: number;
+  dropPrice: number;
+  remainingDropSupply: number;
+  status: MarketStatus;
 };
 
 type Order = {
@@ -221,7 +227,9 @@ export default function Home() {
   const [marketCategory, setMarketCategory] = useState("");
   const [marketLevel, setMarketLevel] = useState<MarketLevel>("community");
   const [marketPrice, setMarketPrice] = useState(1);
+  const [marketSupply, setMarketSupply] = useState(1000);
   const [marketColor, setMarketColor] = useState("#facc15");
+  const [dropQuantity, setDropQuantity] = useState(1);
   const accountName = authUser ? userLabel(authUser) : "You";
 
   useEffect(() => {
@@ -306,6 +314,10 @@ export default function Home() {
             description: typeof data.description === "string" ? data.description : "",
             signal: typeof data.signal === "string" ? data.signal : "",
             color: typeof data.color === "string" ? data.color : "#facc15",
+            totalSupply: typeof data.totalSupply === "number" ? data.totalSupply : 0,
+            dropPrice: typeof data.dropPrice === "number" ? data.dropPrice : 1,
+            remainingDropSupply: typeof data.remainingDropSupply === "number" ? data.remainingDropSupply : 0,
+            status: data.status === "trading" ? "trading" : "drop",
           } satisfies Asset;
         });
 
@@ -499,36 +511,165 @@ export default function Home() {
     const cleanName = marketName.trim();
     const cleanCategory = marketCategory.trim();
     const cleanPrice = Math.max(1, Math.floor(marketPrice));
+    const cleanSupply = Math.max(1, Math.floor(marketSupply));
 
     if (!cleanName || !cleanCategory) {
       setNotice("Name and category required.");
       return;
     }
 
-    const marketRef = await addDoc(collection(db, "markets"), {
-      name: cleanName,
-      category: cleanCategory,
-      level: marketLevel,
-      volatility: 1,
-      lastPrice: cleanPrice,
-      previousPrice: cleanPrice,
-      volume: 0,
-      supply: 0,
-      description: "",
-      signal: "",
-      color: marketColor,
-      createdBy: authUser.uid,
-      createdByName: accountName,
-      createdAt: serverTimestamp(),
+    try {
+      const createdAt = Math.floor(event.timeStamp);
+      const marketRef = await addDoc(collection(db, "markets"), {
+        name: cleanName,
+        category: cleanCategory,
+        level: marketLevel,
+        volatility: 1,
+        lastPrice: cleanPrice,
+        previousPrice: cleanPrice,
+        volume: 0,
+        supply: cleanSupply,
+        totalSupply: cleanSupply,
+        dropPrice: cleanPrice,
+        remainingDropSupply: cleanSupply,
+        status: "drop",
+        description: "",
+        signal: "",
+        color: marketColor,
+        createdBy: authUser.uid,
+        createdByName: accountName,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      setSelectedAssetId(marketRef.id);
+      setLimitPrice(cleanPrice);
+      setMarketName("");
+      setMarketCategory("");
+      setMarketPrice(1);
+      setMarketSupply(1000);
+      setNotice("Market created.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Market create failed.");
+    }
+  }
+
+  async function buyFromDrop(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!authUser) {
+      setNotice("Sign in required.");
+      return;
+    }
+
+    if (!selectedAsset) {
+      setNotice("No market selected.");
+      return;
+    }
+
+    if (selectedAsset.status !== "drop") {
+      setNotice("Drop ended.");
+      return;
+    }
+
+    if (!coinsReady) {
+      setNotice("Loading balance.");
+      return;
+    }
+
+    const cleanQuantity = Math.max(1, Math.floor(dropQuantity));
+    const buyQuantity = Math.min(cleanQuantity, selectedAsset.remainingDropSupply);
+    const totalCost = buyQuantity * selectedAsset.dropPrice;
+
+    if (buyQuantity <= 0) {
+      setNotice("Drop sold out.");
+      return;
+    }
+
+    if (totalCost > coins) {
+      setNotice("Not enough coins.");
+      return;
+    }
+
+    const db = getFirebaseDb();
+
+    if (!db) {
+      setNotice("Database unavailable.");
+      return;
+    }
+
+    const nextCoins = coins - totalCost;
+    const nextHolding = applyTradeToHolding(selectedHolding, buyQuantity, selectedAsset.dropPrice);
+    const nextRemainingSupply = selectedAsset.remainingDropSupply - buyQuantity;
+    const nextStatus: MarketStatus = nextRemainingSupply <= 0 ? "trading" : "drop";
+
+    const batch = writeBatch(db);
+
+    batch.set(
+      doc(db, "users", authUser.uid),
+      {
+        coins: nextCoins,
+        displayName: authUser.displayName ?? "",
+        email: authUser.email ?? "",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    batch.set(
+      doc(db, "users", authUser.uid, "holdings", selectedAsset.id),
+      {
+        quantity: nextHolding.quantity,
+        averagePrice: nextHolding.averagePrice,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    batch.update(doc(db, "markets", selectedAsset.id), {
+      remainingDropSupply: nextRemainingSupply,
+      status: nextStatus,
       updatedAt: serverTimestamp(),
     });
 
-    setSelectedAssetId(marketRef.id);
-    setLimitPrice(cleanPrice);
-    setMarketName("");
-    setMarketCategory("");
-    setMarketPrice(1);
-    setNotice("Market created.");
+    await batch.commit();
+
+    setCoins(nextCoins);
+    setHoldings((current) => ({ ...current, [selectedAsset.id]: nextHolding }));
+    setDropQuantity(1);
+    setNotice(nextStatus === "trading" ? "Drop sold out." : `${buyQuantity} bought.`);
+  }
+
+  async function deleteMarket(assetId: string) {
+    if (!authUser) {
+      setNotice("Sign in required.");
+      return;
+    }
+
+    const db = getFirebaseDb();
+
+    if (!db) {
+      setNotice("Database unavailable.");
+      return;
+    }
+
+    const ordersSnapshot = await getDocs(query(collection(db, "orders")));
+    const tradesSnapshot = await getDocs(query(collection(db, "trades")));
+    const batch = writeBatch(db);
+
+    ordersSnapshot.docs
+      .filter((orderDoc) => orderDoc.data().assetId === assetId)
+      .forEach((orderDoc) => batch.delete(doc(db, "orders", orderDoc.id)));
+
+    tradesSnapshot.docs
+      .filter((tradeDoc) => tradeDoc.data().assetId === assetId)
+      .forEach((tradeDoc) => batch.delete(doc(db, "trades", tradeDoc.id)));
+
+    batch.delete(doc(db, "markets", assetId));
+    await batch.commit();
+
+    setSelectedAssetId((current) => (current === assetId ? "" : current));
+    setNotice("Market deleted.");
   }
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId);
@@ -863,6 +1004,16 @@ export default function Home() {
                   />
                 </label>
                 <label className="text-sm font-semibold">
+                  Supply
+                  <input
+                    value={marketSupply}
+                    onChange={(event) => setMarketSupply(Number(event.target.value))}
+                    min={1}
+                    type="number"
+                    className="mt-2 w-full rounded-md border border-[#e5e7eb] px-3 py-2 outline-none focus:border-[#0a0a0a]"
+                  />
+                </label>
+                <label className="text-sm font-semibold">
                   Color
                   <input
                     value={marketColor}
@@ -915,6 +1066,10 @@ export default function Home() {
                         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Last price</p>
                         <p className="text-2xl font-bold">{asset.lastPrice}</p>
                       </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Status</p>
+                        <p className="font-bold capitalize">{asset.status}</p>
+                      </div>
                       <p className={`font-bold ${assetChange >= 0 ? "text-[#0a0a0a]" : "text-[#dc2626]"}`}>
                         {formatPercent(assetChange)}
                       </p>
@@ -935,9 +1090,18 @@ export default function Home() {
                   <span className="rounded-full bg-[#fef9c3] px-2 py-1 text-xs font-bold text-[#0a0a0a]">
                     {levelCopy[selectedAsset.level].label}
                   </span>
+                  <span className="rounded-full bg-[#fef08a] px-2 py-1 text-xs font-bold text-[#713f12]">
+                    {selectedAsset.status}
+                  </span>
+                  <button
+                    onClick={() => void deleteMarket(selectedAsset.id)}
+                    className="rounded-full border border-[#e5e7eb] px-3 py-1 text-xs font-bold text-[#dc2626] transition hover:border-[#dc2626]"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 text-right">
+              <div className="grid grid-cols-4 gap-3 text-right">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Price</p>
                   <p className="text-2xl font-bold">{selectedAsset.lastPrice}</p>
@@ -952,8 +1116,52 @@ export default function Home() {
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Vol</p>
                   <p className="text-2xl font-bold">{selectedAsset.volatility.toFixed(2)}x</p>
                 </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Supply</p>
+                  <p className="text-2xl font-bold">{selectedAsset.remainingDropSupply}</p>
+                </div>
               </div>
             </div>
+
+            {selectedAsset.status === "drop" ? (
+              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr]">
+                <form onSubmit={buyFromDrop} className="rounded-md border border-[#e5e7eb] p-4">
+                  <h3 className="font-bold">Initial Drop</h3>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm font-semibold">
+                      Quantity
+                      <input
+                        value={dropQuantity}
+                        onChange={(event) => setDropQuantity(Number(event.target.value))}
+                        min={1}
+                        max={selectedAsset.remainingDropSupply}
+                        type="number"
+                        className="mt-2 w-full rounded-md border border-[#e5e7eb] px-3 py-3 text-base outline-none focus:border-[#0a0a0a]"
+                      />
+                    </label>
+                    <div className="rounded-md bg-[#fefce8] p-3 text-sm leading-6 text-[#52525b]">
+                      <p>Price: {currency(selectedAsset.dropPrice)}</p>
+                      <p>Total: {currency(dropQuantity * selectedAsset.dropPrice)}</p>
+                      <p>Remaining: {selectedAsset.remainingDropSupply}</p>
+                    </div>
+                  </div>
+                  <button className="mt-4 w-full rounded-md bg-[#0a0a0a] px-4 py-3 font-bold text-white transition hover:bg-[#18181b]">
+                    Buy from drop
+                  </button>
+                  <p className="mt-3 min-h-12 rounded-md bg-[#fef9c3] p-3 text-sm font-semibold leading-6 text-[#713f12]">
+                    {notice}
+                  </p>
+                </form>
+                <div className="rounded-md border border-[#e5e7eb] p-4">
+                  <h3 className="font-bold">Drop Supply</h3>
+                  <div className="mt-4 rounded-md bg-[#fefce8] p-3 text-sm leading-6 text-[#52525b]">
+                    <p>Total supply: {selectedAsset.totalSupply}</p>
+                    <p>Remaining: {selectedAsset.remainingDropSupply}</p>
+                    <p>Sold: {selectedAsset.totalSupply - selectedAsset.remainingDropSupply}</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr]">
               <form onSubmit={placeOrder} className="rounded-md border border-[#e5e7eb] p-4">
