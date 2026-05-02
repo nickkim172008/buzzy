@@ -5,7 +5,6 @@ import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebas
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
@@ -297,6 +296,12 @@ export default function Home() {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          await setDoc(doc(db, "balances", authUser.uid), {
+            coins: STARTING_COINS,
+            displayName: authUser.displayName ?? "",
+            email: authUser.email ?? "",
+            updatedAt: serverTimestamp(),
+          });
           return;
         }
 
@@ -420,7 +425,7 @@ export default function Home() {
     const unsubscribeBalances = onSnapshot(
       collection(db, "balances"),
       (snapshot) => {
-        setPublicBalances(Object.fromEntries(snapshot.docs.map((balanceDoc) => {
+        const nextBalances = Object.fromEntries(snapshot.docs.map((balanceDoc) => {
           const data = balanceDoc.data();
 
           return [
@@ -431,7 +436,16 @@ export default function Home() {
               email: typeof data.email === "string" ? data.email : "",
             } satisfies PublicBalance,
           ];
-        })));
+        }));
+
+        setPublicBalances(nextBalances);
+
+        const currentBalance = nextBalances[authUser.uid];
+
+        if (currentBalance) {
+          setCoins(currentBalance.coins);
+          setCoinsReady(true);
+        }
       },
       (error) => setNotice(error.message),
     );
@@ -807,8 +821,74 @@ export default function Home() {
       return;
     }
 
-    await deleteDoc(doc(db, "orders", orderId));
-    setNotice("Order cancelled.");
+    const batch = writeBatch(db);
+    let refundText = "";
+
+    if (order.side === "buy") {
+      const refund = order.remaining * order.limitPrice;
+      const nextCoins = coins + refund;
+
+      batch.set(
+        doc(db, "users", authUser.uid),
+        {
+          coins: nextCoins,
+          displayName: authUser.displayName ?? "",
+          email: authUser.email ?? "",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      batch.set(
+        doc(db, "balances", authUser.uid),
+        {
+          coins: nextCoins,
+          displayName: authUser.displayName ?? "",
+          email: authUser.email ?? "",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      setCoins(nextCoins);
+      refundText = ` Refunded ${currency(refund)}.`;
+    } else {
+      const currentHolding = holdings[order.assetId] ?? { quantity: 0, averagePrice: 0 };
+      const nextHolding = {
+        ...currentHolding,
+        quantity: currentHolding.quantity + order.remaining,
+      };
+
+      batch.set(
+        doc(db, "users", authUser.uid, "holdings", order.assetId),
+        {
+          quantity: nextHolding.quantity,
+          averagePrice: nextHolding.averagePrice,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      batch.set(
+        doc(db, "holdings", `${authUser.uid}_${order.assetId}`),
+        {
+          userId: authUser.uid,
+          marketId: order.assetId,
+          quantity: nextHolding.quantity,
+          averagePrice: nextHolding.averagePrice,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      setHoldings((current) => ({ ...current, [order.assetId]: nextHolding }));
+      refundText = ` Returned ${order.remaining} shares.`;
+    }
+
+    batch.delete(doc(db, "orders", orderId));
+    await batch.commit();
+    setOrders((current) => current.filter((item) => item.id !== orderId));
+    setNotice(`Order cancelled.${refundText}`);
   }
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId);
@@ -983,8 +1063,7 @@ export default function Home() {
         remaining -= tradeQuantity;
         nextCoins += tradeQuantity * tradePrice;
         getAccount(authUser.uid, accountName).coins = nextCoins;
-        const buyerAccount = getAccount(match.userId, match.user);
-        buyerAccount.coins = Math.max(0, buyerAccount.coins - tradeQuantity * tradePrice);
+        getAccount(match.userId, match.user);
         const buyerHolding = getHolding(match.userId);
         const updatedBuyerHolding = applyTradeToHolding(buyerHolding, tradeQuantity, tradePrice);
         buyerHolding.quantity = updatedBuyerHolding.quantity;
@@ -1178,7 +1257,7 @@ export default function Home() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#ca8a04]">Buzzly</p>
             <h1 className="mt-2 text-4xl font-bold tracking-normal text-[#0a0a0a] md:text-5xl">
-              Trade the hype.
+              Trade the Hype.
             </h1>
           </div>
           <div className="grid min-w-64 gap-3 rounded-lg border border-[#e5e7eb] bg-white p-4 shadow-sm sm:grid-cols-2 md:min-w-[22rem]">
