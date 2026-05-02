@@ -1405,14 +1405,14 @@ export default function Home() {
               <div className="grid gap-4">
                 <div className="rounded-md border border-[#e5e7eb] p-4">
                   <h3 className="font-bold">Order Book</h3>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs font-bold uppercase tracking-[0.12em] text-[#71717a]">
-                    <span>Limit price</span>
-                    <span className="text-right">Quantity</span>
-                  </div>
-                  <div className="mt-2 grid max-h-72 grid-cols-2 gap-3 overflow-y-auto pr-1">
-                    <div>
+                  <div className="mt-3 grid max-h-64 grid-cols-2 gap-3 overflow-y-auto pr-1">
+                    <div className="min-w-0">
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#0a0a0a]">Bids</p>
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-2 grid grid-cols-2 gap-2 px-2 text-xs font-bold uppercase tracking-[0.12em] text-[#71717a]">
+                        <span>Price</span>
+                        <span className="text-right">Qty</span>
+                      </div>
+                      <div className="mt-1 space-y-2">
                         {buyOrders.map((order) => (
                           <div key={order.id} className="flex justify-between rounded bg-[#fef9c3] px-3 py-2 text-sm">
                             <span>{order.limitPrice}</span>
@@ -1421,9 +1421,13 @@ export default function Home() {
                         ))}
                       </div>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#dc2626]">Asks</p>
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-2 grid grid-cols-2 gap-2 px-2 text-xs font-bold uppercase tracking-[0.12em] text-[#71717a]">
+                        <span>Price</span>
+                        <span className="text-right">Qty</span>
+                      </div>
+                      <div className="mt-1 space-y-2">
                         {sellOrders.map((order) => (
                           <div key={order.id} className="flex justify-between rounded bg-[#fef2f2] px-3 py-2 text-sm">
                             <span>{order.limitPrice}</span>
@@ -1442,13 +1446,13 @@ export default function Home() {
                     <span>Price</span>
                     <span>Buyer</span>
                   </div>
-                  <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+                  <div className="mt-2 max-h-64 space-y-2 overflow-y-auto pr-1">
                     {assetTrades.length ? (
                       assetTrades.map((trade) => (
-                        <div key={trade.id} className="flex items-center justify-between rounded bg-[#fefce8] px-3 py-2 text-sm">
-                          <span>{trade.quantity} shares</span>
+                        <div key={trade.id} className="grid grid-cols-3 items-center gap-3 rounded bg-[#fefce8] px-3 py-2 text-sm">
+                          <span>{trade.quantity}</span>
                           <span className="font-bold">{trade.price}</span>
-                          <span className="text-[#52525b]">{trade.buyer} bought</span>
+                          <span className="truncate text-[#52525b]">{trade.buyer}</span>
                         </div>
                       ))
                     ) : (
