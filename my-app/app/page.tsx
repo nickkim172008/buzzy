@@ -21,6 +21,7 @@ type MarketLevel = "admin" | "community" | "private";
 type MarketStatus = "drop" | "trading";
 type Side = "buy" | "sell";
 type OrderStatus = "open" | "filled" | "partially_filled";
+type AppTab = "markets" | "create" | "drop" | "trading" | "portfolio" | "account";
 
 type Asset = {
   id: string;
@@ -110,6 +111,15 @@ const levelCopy: Record<
 };
 
 const STARTING_COINS = 0;
+
+const tabs: { id: AppTab; label: string; mark: string }[] = [
+  { id: "markets", label: "Markets", mark: "M" },
+  { id: "create", label: "Create", mark: "+" },
+  { id: "drop", label: "Drop", mark: "D" },
+  { id: "trading", label: "Trade", mark: "T" },
+  { id: "portfolio", label: "Portfolio", mark: "P" },
+  { id: "account", label: "Account", mark: "A" },
+];
 
 function timestampMillis(value: unknown) {
   if (typeof value === "number") {
@@ -246,6 +256,7 @@ export default function Home() {
   const [marketSupply, setMarketSupply] = useState(1000);
   const [marketColor, setMarketColor] = useState("#facc15");
   const [dropQuantity, setDropQuantity] = useState(1);
+  const [activeTab, setActiveTab] = useState<AppTab>("markets");
   const accountName = authUser ? userLabel(authUser) : "You";
 
   useEffect(() => {
@@ -801,6 +812,12 @@ export default function Home() {
   }
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId);
+  const activeDrops = assets.filter((asset) => asset.status === "drop" && asset.remainingDropSupply > 0);
+  const portfolioAssets = assets.filter((asset) => (holdings[asset.id]?.quantity ?? 0) > 0);
+  const visibleAsset =
+    activeTab === "drop" && selectedAsset && !activeDrops.some((asset) => asset.id === selectedAsset.id)
+      ? undefined
+      : selectedAsset;
   const selectedAssetOrderId = selectedAsset?.id ?? "";
   const buyOrders = selectedAsset ? getOrderBook(orders, selectedAssetOrderId, "buy") : [];
   const sellOrders = selectedAsset ? getOrderBook(orders, selectedAssetOrderId, "sell") : [];
@@ -1132,6 +1149,30 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#f8fafc] text-[#0a0a0a]">
+      <div className="min-h-screen md:grid md:grid-cols-[5.5rem_1fr]">
+        <nav className="sticky top-0 z-10 flex gap-2 border-b border-[#e5e7eb] bg-white px-3 py-3 md:h-screen md:flex-col md:items-center md:border-b-0 md:border-r">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`group flex items-center gap-3 rounded-full px-2 py-2 text-sm font-bold transition md:flex-col md:gap-1 ${
+                activeTab === tab.id ? "bg-[#0a0a0a] text-white" : "text-[#52525b] hover:bg-[#fefce8]"
+              }`}
+              title={tab.label}
+            >
+              <span
+                className={`flex h-10 w-10 items-center justify-center rounded-full text-base font-black ${
+                  activeTab === tab.id ? "bg-[#facc15] text-[#0a0a0a]" : "bg-[#fef08a] text-[#713f12]"
+                }`}
+              >
+                {tab.mark}
+              </span>
+              <span className="hidden text-xs md:block">{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div>
       <section className="border-b border-[#e5e7eb] bg-[#fefce8]">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-6 md:flex-row md:items-center md:justify-between">
           <div>
@@ -1159,15 +1200,18 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[1.1fr_1.6fr_0.95fr]">
+      <section className="mx-auto grid max-w-6xl gap-5 px-5 py-6 lg:grid-cols-1">
         <aside className="space-y-4">
+          {activeTab === "markets" ? (
           <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold">Markets</h2>
             {assets.length ? null : (
               <p className="mt-4 rounded-md bg-[#fefce8] px-3 py-3 text-sm text-[#52525b]">No markets.</p>
             )}
           </div>
+          ) : null}
 
+          {activeTab === "create" ? (
           <form onSubmit={createMarket} className="rounded-lg border border-[#e5e7eb] bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold">Create Market</h2>
             <div className="mt-4 grid gap-3">
@@ -1237,10 +1281,11 @@ export default function Home() {
               Create
             </button>
           </form>
+          ) : null}
         </aside>
 
         <section className="space-y-5">
-          {assets.length ? (
+          {activeTab === "markets" && assets.length ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {assets.map((asset) => {
                 const assetChange = asset.previousPrice
@@ -1289,21 +1334,63 @@ export default function Home() {
             </div>
           ) : null}
 
+          {activeTab === "drop" && activeDrops.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {activeDrops.map((asset) => (
+                <button
+                  key={asset.id}
+                  onClick={() => {
+                    setSelectedAssetId(asset.id);
+                    setLimitPrice(asset.lastPrice);
+                  }}
+                  className={`rounded-lg border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                    selectedAsset?.id === asset.id ? "border-[#0a0a0a]" : "border-[#e5e7eb]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold">{asset.name}</p>
+                      <p className="text-sm text-[#52525b]">{asset.category}</p>
+                    </div>
+                    <span className="rounded-full bg-[#fef08a] px-2 py-1 text-xs font-bold text-[#713f12]">
+                      Drop
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Price</p>
+                      <p className="font-bold">{asset.dropPrice}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Left</p>
+                      <p className="font-bold">{asset.remainingDropSupply}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Supply</p>
+                      <p className="font-bold">{asset.totalSupply}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {activeTab === "drop" || activeTab === "trading" ? (
           <div className="rounded-lg border border-[#e5e7eb] bg-white p-5 shadow-sm">
-            {selectedAsset ? (
+            {visibleAsset ? (
               <>
               <div className="flex flex-col gap-4 border-b border-[#e5e7eb] pb-5 md:flex-row md:items-start md:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-3xl font-bold">{selectedAsset.name}</h2>
+                  <h2 className="text-3xl font-bold">{visibleAsset.name}</h2>
                   <span className="rounded-full bg-[#fef9c3] px-2 py-1 text-xs font-bold text-[#0a0a0a]">
-                    {levelCopy[selectedAsset.level].label}
+                    {levelCopy[visibleAsset.level].label}
                   </span>
                   <span className="rounded-full bg-[#fef08a] px-2 py-1 text-xs font-bold text-[#713f12]">
-                    {selectedAsset.status}
+                    {visibleAsset.status}
                   </span>
                   <button
-                    onClick={() => void deleteMarket(selectedAsset.id)}
+                    onClick={() => void deleteMarket(visibleAsset.id)}
                     className="rounded-full border border-[#e5e7eb] px-3 py-1 text-xs font-bold text-[#dc2626] transition hover:border-[#dc2626]"
                   >
                     Delete
@@ -1313,7 +1400,7 @@ export default function Home() {
               <div className="grid grid-cols-4 gap-3 text-right">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Price</p>
-                  <p className="text-2xl font-bold">{selectedAsset.lastPrice}</p>
+                  <p className="text-2xl font-bold">{visibleAsset.lastPrice}</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Move</p>
@@ -1323,16 +1410,16 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Vol</p>
-                  <p className="text-2xl font-bold">{selectedAsset.volatility.toFixed(2)}x</p>
+                  <p className="text-2xl font-bold">{visibleAsset.volatility.toFixed(2)}x</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Supply</p>
-                  <p className="text-2xl font-bold">{selectedAsset.remainingDropSupply}</p>
+                  <p className="text-2xl font-bold">{visibleAsset.remainingDropSupply}</p>
                 </div>
               </div>
             </div>
 
-            {selectedAsset.status === "drop" ? (
+            {activeTab === "drop" && visibleAsset.status === "drop" ? (
               <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr]">
                 <form onSubmit={buyFromDrop} className="rounded-md border border-[#e5e7eb] p-4">
                   <h3 className="font-bold">Initial Drop</h3>
@@ -1343,15 +1430,15 @@ export default function Home() {
                         value={dropQuantity}
                         onChange={(event) => setDropQuantity(Number(event.target.value))}
                         min={1}
-                        max={selectedAsset.remainingDropSupply}
+                        max={visibleAsset.remainingDropSupply}
                         type="number"
                         className="mt-2 w-full rounded-md border border-[#e5e7eb] px-3 py-3 text-base outline-none focus:border-[#0a0a0a]"
                       />
                     </label>
                     <div className="rounded-md bg-[#fefce8] p-3 text-sm leading-6 text-[#52525b]">
-                      <p>Price: {currency(selectedAsset.dropPrice)}</p>
-                      <p>Total: {currency(dropQuantity * selectedAsset.dropPrice)}</p>
-                      <p>Remaining: {selectedAsset.remainingDropSupply}</p>
+                      <p>Price: {currency(visibleAsset.dropPrice)}</p>
+                      <p>Total: {currency(dropQuantity * visibleAsset.dropPrice)}</p>
+                      <p>Remaining: {visibleAsset.remainingDropSupply}</p>
                     </div>
                   </div>
                   <button className="mt-4 w-full rounded-md bg-[#0a0a0a] px-4 py-3 font-bold text-white transition hover:bg-[#18181b]">
@@ -1364,14 +1451,15 @@ export default function Home() {
                 <div className="rounded-md border border-[#e5e7eb] p-4">
                   <h3 className="font-bold">Drop Supply</h3>
                   <div className="mt-4 rounded-md bg-[#fefce8] p-3 text-sm leading-6 text-[#52525b]">
-                    <p>Total supply: {selectedAsset.totalSupply}</p>
-                    <p>Remaining: {selectedAsset.remainingDropSupply}</p>
-                    <p>Sold: {selectedAsset.totalSupply - selectedAsset.remainingDropSupply}</p>
+                    <p>Total supply: {visibleAsset.totalSupply}</p>
+                    <p>Remaining: {visibleAsset.remainingDropSupply}</p>
+                    <p>Sold: {visibleAsset.totalSupply - visibleAsset.remainingDropSupply}</p>
                   </div>
                 </div>
               </div>
             ) : null}
 
+            {activeTab === "trading" ? (
             <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr]">
               <form onSubmit={placeOrder} className="rounded-md border border-[#e5e7eb] p-4">
                 <div className="flex rounded-md bg-[#fef08a] p-1">
@@ -1505,18 +1593,23 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            ) : null}
               </>
             ) : (
-              <p className="rounded-md bg-[#fefce8] px-3 py-3 text-sm text-[#52525b]">No market selected.</p>
+              <p className="rounded-md bg-[#fefce8] px-3 py-3 text-sm text-[#52525b]">
+                {activeTab === "drop" ? "No active drop selected." : "No market selected."}
+              </p>
             )}
           </div>
+          ) : null}
         </section>
 
         <aside className="space-y-4">
+          {activeTab === "portfolio" ? (
           <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold">Portfolio</h2>
             <div className="mt-4 space-y-3">
-              {assets.length ? assets.map((asset) => {
+              {portfolioAssets.length ? portfolioAssets.map((asset) => {
                 const holding = holdings[asset.id] ?? { quantity: 0, averagePrice: 0 };
                 const profit = holding.quantity * (asset.lastPrice - holding.averagePrice);
 
@@ -1539,8 +1632,31 @@ export default function Home() {
               )}
             </div>
           </div>
+          ) : null}
+
+          {activeTab === "account" ? (
+            <div className="rounded-lg border border-[#e5e7eb] bg-white p-4 shadow-sm">
+              <h2 className="text-lg font-bold">Account</h2>
+              <div className="mt-4 rounded-md bg-[#fefce8] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Coins</p>
+                <p className="mt-1 text-2xl font-bold">{coinsReady ? currency(coins) : "Loading"}</p>
+              </div>
+              <div className="mt-3 rounded-md border border-[#e5e7eb] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#71717a]">Signed in as</p>
+                <p className="mt-1 truncate font-bold">{accountName}</p>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="mt-4 w-full rounded-md bg-[#0a0a0a] px-4 py-3 font-bold text-white transition hover:bg-[#18181b]"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : null}
         </aside>
       </section>
+        </div>
+      </div>
     </main>
   );
 }
