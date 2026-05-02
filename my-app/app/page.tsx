@@ -70,6 +70,19 @@ type Trade = {
   createdAt: number;
 };
 
+type PublicBalance = {
+  coins: number;
+  displayName: string;
+  email: string;
+};
+
+type PublicHolding = {
+  userId: string;
+  marketId: string;
+  quantity: number;
+  averagePrice: number;
+};
+
 declare global {
   interface Window {
     buzzlyAddCoins?: (amount: number) => Promise<number>;
@@ -217,6 +230,8 @@ export default function Home() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [holdings, setHoldings] = useState<Record<string, Holding>>({});
+  const [publicBalances, setPublicBalances] = useState<Record<string, PublicBalance>>({});
+  const [publicHoldings, setPublicHoldings] = useState<Record<string, Holding>>({});
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [side, setSide] = useState<Side>("buy");
   const [quantity, setQuantity] = useState(1);
@@ -390,11 +405,53 @@ export default function Home() {
       (error) => setNotice(error.message),
     );
 
+    const unsubscribeBalances = onSnapshot(
+      collection(db, "balances"),
+      (snapshot) => {
+        setPublicBalances(Object.fromEntries(snapshot.docs.map((balanceDoc) => {
+          const data = balanceDoc.data();
+
+          return [
+            balanceDoc.id,
+            {
+              coins: typeof data.coins === "number" ? data.coins : 0,
+              displayName: typeof data.displayName === "string" ? data.displayName : "",
+              email: typeof data.email === "string" ? data.email : "",
+            } satisfies PublicBalance,
+          ];
+        })));
+      },
+      (error) => setNotice(error.message),
+    );
+
+    const unsubscribePublicHoldings = onSnapshot(
+      collection(db, "holdings"),
+      (snapshot) => {
+        setPublicHoldings(Object.fromEntries(snapshot.docs.map((holdingDoc) => {
+          const data = holdingDoc.data();
+          const holding = {
+            userId: typeof data.userId === "string" ? data.userId : "",
+            marketId: typeof data.marketId === "string" ? data.marketId : "",
+            quantity: typeof data.quantity === "number" ? data.quantity : 0,
+            averagePrice: typeof data.averagePrice === "number" ? data.averagePrice : 0,
+          } satisfies PublicHolding;
+
+          return [
+            `${holding.userId}_${holding.marketId}`,
+            { quantity: holding.quantity, averagePrice: holding.averagePrice } satisfies Holding,
+          ];
+        })));
+      },
+      (error) => setNotice(error.message),
+    );
+
     return () => {
       unsubscribeMarkets();
       unsubscribeOrders();
       unsubscribeTrades();
       unsubscribeHoldings();
+      unsubscribeBalances();
+      unsubscribePublicHoldings();
     };
   }, [authUser]);
 
@@ -419,6 +476,17 @@ export default function Home() {
       },
       { merge: true },
     );
+
+    await setDoc(
+      doc(db, "balances", authUser.uid),
+      {
+        coins: nextCoins,
+        displayName: authUser.displayName ?? "",
+        email: authUser.email ?? "",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
   }, [authUser]);
 
   const saveHolding = useCallback(async (assetId: string, holding: Holding) => {
@@ -435,6 +503,18 @@ export default function Home() {
     await setDoc(
       doc(db, "users", authUser.uid, "holdings", assetId),
       {
+        quantity: holding.quantity,
+        averagePrice: holding.averagePrice,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    await setDoc(
+      doc(db, "holdings", `${authUser.uid}_${assetId}`),
+      {
+        userId: authUser.uid,
+        marketId: assetId,
         quantity: holding.quantity,
         averagePrice: holding.averagePrice,
         updatedAt: serverTimestamp(),
@@ -617,8 +697,31 @@ export default function Home() {
     );
 
     batch.set(
+      doc(db, "balances", authUser.uid),
+      {
+        coins: nextCoins,
+        displayName: authUser.displayName ?? "",
+        email: authUser.email ?? "",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    batch.set(
       doc(db, "users", authUser.uid, "holdings", selectedAsset.id),
       {
+        quantity: nextHolding.quantity,
+        averagePrice: nextHolding.averagePrice,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    batch.set(
+      doc(db, "holdings", `${authUser.uid}_${selectedAsset.id}`),
+      {
+        userId: authUser.uid,
+        marketId: selectedAsset.id,
         quantity: nextHolding.quantity,
         averagePrice: nextHolding.averagePrice,
         updatedAt: serverTimestamp(),
@@ -702,6 +805,8 @@ export default function Home() {
       return;
     }
 
+    const tradeAssetId = selectedAsset.id;
+    const currentUserId = authUser.uid;
     const cleanQuantity = Math.max(1, Math.floor(quantity));
     const cleanLimit = Math.max(1, Math.floor(limitPrice));
     const createdAt = Math.floor(event.timeStamp);
@@ -718,7 +823,7 @@ export default function Home() {
 
     const incoming: Order = {
       id: `user-${createdAt}`,
-      assetId: selectedAsset.id,
+      assetId: tradeAssetId,
       userId: authUser.uid,
       user: accountName,
       side,
@@ -733,13 +838,46 @@ export default function Home() {
     const nextTrades: Trade[] = [];
     const nextHoldings = { ...holdings };
     const matchedOrders: Order[] = [];
+    const accountUpdates: Record<string, PublicBalance> = {
+      [currentUserId]: {
+        coins,
+        displayName: authUser.displayName ?? "",
+        email: authUser.email ?? "",
+      },
+    };
+    const holdingUpdates: Record<string, PublicHolding> = {};
     let remaining = cleanQuantity;
     let nextCoins = coins;
 
+    function getAccount(userId: string, fallbackName: string) {
+      accountUpdates[userId] ??= publicBalances[userId] ?? {
+        coins: 0,
+        displayName: fallbackName,
+        email: "",
+      };
+
+      return accountUpdates[userId];
+    }
+
+    function getHolding(userId: string) {
+      const key = `${userId}_${tradeAssetId}`;
+      const fallback = userId === currentUserId ? selectedHolding : publicHoldings[key];
+
+      holdingUpdates[key] ??= {
+        userId,
+        marketId: tradeAssetId,
+        quantity: fallback?.quantity ?? 0,
+        averagePrice: fallback?.averagePrice ?? 0,
+      };
+
+      return holdingUpdates[key];
+    }
+
     if (side === "buy") {
       nextCoins -= cleanQuantity * cleanLimit;
+      getAccount(authUser.uid, accountName).coins = nextCoins;
       const matches = nextOrders
-        .filter((order) => order.assetId === selectedAsset.id && order.side === "sell" && order.remaining > 0 && order.limitPrice <= cleanLimit)
+        .filter((order) => order.assetId === tradeAssetId && order.side === "sell" && order.remaining > 0 && order.limitPrice <= cleanLimit)
         .sort((a, b) => a.limitPrice - b.limitPrice || a.createdAt - b.createdAt);
 
       for (const match of matches) {
@@ -754,10 +892,17 @@ export default function Home() {
         matchedOrders.push(match);
         remaining -= tradeQuantity;
         nextCoins += refund;
-        nextHoldings[selectedAsset.id] = applyTradeToHolding(nextHoldings[selectedAsset.id], tradeQuantity, tradePrice);
+        getAccount(authUser.uid, accountName).coins = nextCoins;
+        getAccount(match.userId, match.user).coins += total;
+        const sellerHolding = getHolding(match.userId);
+        sellerHolding.quantity = Math.max(0, sellerHolding.quantity - tradeQuantity);
+        nextHoldings[tradeAssetId] = applyTradeToHolding(nextHoldings[tradeAssetId], tradeQuantity, tradePrice);
+        const buyerHolding = getHolding(authUser.uid);
+        buyerHolding.quantity = nextHoldings[tradeAssetId].quantity;
+        buyerHolding.averagePrice = nextHoldings[tradeAssetId].averagePrice;
         nextTrades.push({
           id: `trade-${createdAt}-${match.id}`,
-          assetId: selectedAsset.id,
+          assetId: tradeAssetId,
           buyerId: authUser.uid,
           buyer: accountName,
           sellerId: match.userId,
@@ -773,13 +918,16 @@ export default function Home() {
       incoming.remaining = remaining;
       incoming.status = remaining === 0 ? "filled" : remaining === cleanQuantity ? "open" : "partially_filled";
     } else {
-      nextHoldings[selectedAsset.id] = {
+      nextHoldings[tradeAssetId] = {
         ...selectedHolding,
         quantity: selectedHolding.quantity - cleanQuantity,
       };
+      const sellerHolding = getHolding(authUser.uid);
+      sellerHolding.quantity = nextHoldings[tradeAssetId].quantity;
+      sellerHolding.averagePrice = nextHoldings[tradeAssetId].averagePrice;
 
       const matches = nextOrders
-        .filter((order) => order.assetId === selectedAsset.id && order.side === "buy" && order.remaining > 0 && order.limitPrice >= cleanLimit)
+        .filter((order) => order.assetId === tradeAssetId && order.side === "buy" && order.remaining > 0 && order.limitPrice >= cleanLimit)
         .sort((a, b) => b.limitPrice - a.limitPrice || a.createdAt - b.createdAt);
 
       for (const match of matches) {
@@ -792,9 +940,16 @@ export default function Home() {
         matchedOrders.push(match);
         remaining -= tradeQuantity;
         nextCoins += tradeQuantity * tradePrice;
+        getAccount(authUser.uid, accountName).coins = nextCoins;
+        const buyerAccount = getAccount(match.userId, match.user);
+        buyerAccount.coins = Math.max(0, buyerAccount.coins - tradeQuantity * tradePrice);
+        const buyerHolding = getHolding(match.userId);
+        const updatedBuyerHolding = applyTradeToHolding(buyerHolding, tradeQuantity, tradePrice);
+        buyerHolding.quantity = updatedBuyerHolding.quantity;
+        buyerHolding.averagePrice = updatedBuyerHolding.averagePrice;
         nextTrades.push({
           id: `trade-${createdAt}-${match.id}`,
-          assetId: selectedAsset.id,
+          assetId: tradeAssetId,
           buyerId: match.userId,
           buyer: match.user,
           sellerId: authUser.uid,
@@ -867,18 +1022,47 @@ export default function Home() {
         { merge: true },
       );
 
-      batch.set(
-        doc(db, "users", authUser.uid, "holdings", selectedAsset.id),
-        {
-          quantity: nextHoldings[selectedAsset.id]?.quantity ?? 0,
-          averagePrice: nextHoldings[selectedAsset.id]?.averagePrice ?? 0,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      for (const [userId, account] of Object.entries(accountUpdates)) {
+        batch.set(
+          doc(db, "balances", userId),
+          {
+            coins: account.coins,
+            displayName: account.displayName,
+            email: account.email,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      for (const holding of Object.values(holdingUpdates)) {
+        batch.set(
+          doc(db, "holdings", `${holding.userId}_${holding.marketId}`),
+          {
+            userId: holding.userId,
+            marketId: holding.marketId,
+            quantity: holding.quantity,
+            averagePrice: holding.averagePrice,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        if (holding.userId === authUser.uid) {
+          batch.set(
+            doc(db, "users", authUser.uid, "holdings", tradeAssetId),
+            {
+              quantity: holding.quantity,
+              averagePrice: holding.averagePrice,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+      }
 
       if (latestTrade) {
-        batch.update(doc(db, "markets", selectedAsset.id), {
+        batch.update(doc(db, "markets", tradeAssetId), {
           previousPrice: selectedAsset.lastPrice,
           lastPrice: latestTrade.price,
           volume: selectedAsset.volume + nextTrades.reduce((sum, trade) => sum + trade.price * trade.quantity, 0),
@@ -893,10 +1077,10 @@ export default function Home() {
     setTrades([...nextTrades.reverse(), ...trades]);
     setHoldings(nextHoldings);
     setCoins(nextCoins);
-    void saveHolding(selectedAsset.id, nextHoldings[selectedAsset.id] ?? { quantity: 0, averagePrice: 0 });
+    void saveHolding(tradeAssetId, nextHoldings[tradeAssetId] ?? { quantity: 0, averagePrice: 0 });
     setAssets((currentAssets) =>
       currentAssets.map((asset) =>
-        asset.id === selectedAsset.id && latestTrade
+        asset.id === tradeAssetId && latestTrade
           ? {
               ...asset,
               previousPrice: asset.lastPrice,
@@ -1221,11 +1405,15 @@ export default function Home() {
               <div className="grid gap-4">
                 <div className="rounded-md border border-[#e5e7eb] p-4">
                   <h3 className="font-bold">Order Book</h3>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs font-bold uppercase tracking-[0.12em] text-[#71717a]">
+                    <span>Limit price</span>
+                    <span className="text-right">Quantity</span>
+                  </div>
+                  <div className="mt-2 grid max-h-72 grid-cols-2 gap-3 overflow-y-auto pr-1">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#0a0a0a]">Bids</p>
                       <div className="mt-2 space-y-2">
-                        {buyOrders.slice(0, 5).map((order) => (
+                        {buyOrders.map((order) => (
                           <div key={order.id} className="flex justify-between rounded bg-[#fef9c3] px-3 py-2 text-sm">
                             <span>{order.limitPrice}</span>
                             <span>{order.remaining}</span>
@@ -1236,7 +1424,7 @@ export default function Home() {
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#dc2626]">Asks</p>
                       <div className="mt-2 space-y-2">
-                        {sellOrders.slice(0, 5).map((order) => (
+                        {sellOrders.map((order) => (
                           <div key={order.id} className="flex justify-between rounded bg-[#fef2f2] px-3 py-2 text-sm">
                             <span>{order.limitPrice}</span>
                             <span>{order.remaining}</span>
@@ -1249,7 +1437,12 @@ export default function Home() {
 
                 <div className="rounded-md border border-[#e5e7eb] p-4">
                   <h3 className="font-bold">Recent Trades</h3>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 grid grid-cols-3 gap-3 text-xs font-bold uppercase tracking-[0.12em] text-[#71717a]">
+                    <span>Quantity</span>
+                    <span>Price</span>
+                    <span>Buyer</span>
+                  </div>
+                  <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
                     {assetTrades.length ? (
                       assetTrades.map((trade) => (
                         <div key={trade.id} className="flex items-center justify-between rounded bg-[#fefce8] px-3 py-2 text-sm">
@@ -1306,4 +1499,5 @@ export default function Home() {
     </main>
   );
 }
+
 
