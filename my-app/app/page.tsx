@@ -825,8 +825,8 @@ function AuthScreen({
     <main className="min-h-screen bg-background text-foreground">
       <section className="mx-auto grid min-h-screen max-w-7xl items-center gap-8 px-5 py-8 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
-          <Image src="/buzzy-logo.svg" alt="Buzzy logo" width={64} height={64} className="h-16 w-16 rounded-[1.25rem] shadow-card" />
-          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.18em] text-muted">Buzzly accounts</p>
+          <Image src="/beelogo.png" alt="Buzzy logo" width={64} height={64} className="h-16 w-16 rounded-[1.25rem] object-cover shadow-card" />
+          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.18em] text-muted">Buzzy accounts</p>
           <h1 className="mt-3 max-w-3xl text-4xl font-black tracking-normal text-foreground md:text-6xl">
             Sign in.
           </h1>
@@ -2530,7 +2530,7 @@ export default function Home() {
             onClick={() => setActiveTab("markets")}
             className="flex items-center gap-3 rounded-3xl px-2 py-2 text-left"
           >
-            <Image src="/buzzy-logo.svg" alt="Buzzy logo" width={48} height={48} className="h-12 w-12 rounded-2xl shadow-card" />
+            <Image src="/beelogo.png" alt="Buzzy logo" width={48} height={48} className="h-12 w-12 rounded-2xl object-cover shadow-card" />
             <span>
               <span className="flex items-center gap-2">
                 <span className="block text-lg font-black">Buzzy</span>
@@ -2569,7 +2569,7 @@ export default function Home() {
           <header className="border-b border-border bg-background px-5 py-6 lg:px-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Buzzly</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Buzzy</p>
                 <h1 className="mt-2 text-4xl font-black tracking-normal text-foreground md:text-5xl">
                   Trade the Hype.
                 </h1>
