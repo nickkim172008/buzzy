@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
@@ -22,7 +24,9 @@ import { firebaseConfigIsReady, getFirebaseAuth, getFirebaseDb, googleProvider }
 type MarketLevel = "admin" | "community" | "private";
 type MarketStatus = "drop" | "trading";
 type Side = "buy" | "sell";
+type TradeMode = Side | "short";
 type OrderStatus = "open" | "filled" | "partially_filled";
+type ShortPositionStatus = "open" | "closed" | "liquidated";
 type AppTab = "markets" | "suggest" | "survey" | "create" | "drop" | "trading" | "portfolio" | "account";
 type ChartRange = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
 type ChartMode = "value" | "returns";
@@ -70,6 +74,23 @@ type Order = {
 type Holding = {
   quantity: number;
   averagePrice: number;
+};
+
+type ShortPosition = {
+  id: string;
+  userId: string;
+  assetId: string;
+  quantity: number;
+  entryPrice: number;
+  collateral: number;
+  liquidationPrice: number;
+  maintenanceBufferRate: number;
+  status: ShortPositionStatus;
+  openedAt: number;
+  closedAt?: number;
+  closePrice?: number;
+  realizedPnL?: number;
+  returnedCollateral?: number;
 };
 
 type Trade = {
@@ -186,6 +207,7 @@ const DROP_BATCH_SIZE = 3;
 const DROP_CYCLE_MS = 60 * 1000;
 const SCHEDULED_DROP_PRICE = 10;
 const SCHEDULED_DROP_SUPPLY = 100;
+const SHORT_MAINTENANCE_BUFFER_RATE = 0.2;
 const chartRanges: ChartRange[] = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"];
 
 const tabs: { id: AppTab; label: string; mark: string }[] = [
@@ -823,6 +845,24 @@ function applyTradeToHolding(holding: Holding | undefined, quantity: number, pri
   };
 }
 
+function shortPnL(entryPrice: number, currentPrice: number, quantity: number) {
+  return (entryPrice - currentPrice) * quantity;
+}
+
+function shortEquity(position: Pick<ShortPosition, "entryPrice" | "collateral" | "quantity">, currentPrice: number) {
+  return position.collateral + shortPnL(position.entryPrice, currentPrice, position.quantity);
+}
+
+function shortMaintenanceMargin(position: Pick<ShortPosition, "collateral" | "maintenanceBufferRate">) {
+  return position.collateral * position.maintenanceBufferRate;
+}
+
+function shortLiquidationPrice(entryPrice: number, quantity: number, collateral: number, maintenanceBufferRate = SHORT_MAINTENANCE_BUFFER_RATE) {
+  const maintenanceMargin = collateral * maintenanceBufferRate;
+
+  return entryPrice + ((collateral - maintenanceMargin) / Math.max(1, quantity));
+}
+
 function userLabel(user: User) {
   return user.displayName?.trim() || user.email?.split("@")[0] || "You";
 }
@@ -896,12 +936,14 @@ export default function Home() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [marketHistory, setMarketHistory] = useState<MarketHistoryPoint[]>([]);
+  const [shortPositions, setShortPositions] = useState<ShortPosition[]>([]);
   const [holdings, setHoldings] = useState<Record<string, Holding>>({});
   const [publicBalances, setPublicBalances] = useState<Record<string, PublicBalance>>({});
   const [publicHoldings, setPublicHoldings] = useState<Record<string, Holding>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [savedUserCoins, setSavedUserCoins] = useState<number | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [tradeMode, setTradeMode] = useState<TradeMode>("buy");
   const [side, setSide] = useState<Side>("buy");
   const [quantity, setQuantity] = useState<NumericInput>(1);
   const [limitPrice, setLimitPrice] = useState<NumericInput>(1);
@@ -1118,6 +1160,38 @@ export default function Home() {
       (error) => setNotice(error.message),
     );
 
+    const unsubscribeShortPositions = onSnapshot(
+      query(collection(db, "shortPositions"), orderBy("openedAt", "desc")),
+      (snapshot) => {
+        setShortPositions(snapshot.docs.map((positionDoc) => {
+          const data = positionDoc.data();
+          const status = ["open", "closed", "liquidated"].includes(data.status)
+            ? data.status as ShortPositionStatus
+            : "open";
+
+          return {
+            id: positionDoc.id,
+            userId: typeof data.userId === "string" ? data.userId : "",
+            assetId: typeof data.assetId === "string" ? data.assetId : "",
+            quantity: typeof data.quantity === "number" ? data.quantity : 0,
+            entryPrice: typeof data.entryPrice === "number" ? data.entryPrice : 0,
+            collateral: typeof data.collateral === "number" ? data.collateral : 0,
+            liquidationPrice: typeof data.liquidationPrice === "number" ? data.liquidationPrice : 0,
+            maintenanceBufferRate: typeof data.maintenanceBufferRate === "number"
+              ? data.maintenanceBufferRate
+              : SHORT_MAINTENANCE_BUFFER_RATE,
+            status,
+            openedAt: timestampMillis(data.openedAt),
+            closedAt: timestampMillis(data.closedAt) || undefined,
+            closePrice: typeof data.closePrice === "number" ? data.closePrice : undefined,
+            realizedPnL: typeof data.realizedPnL === "number" ? data.realizedPnL : undefined,
+            returnedCollateral: typeof data.returnedCollateral === "number" ? data.returnedCollateral : undefined,
+          } satisfies ShortPosition;
+        }));
+      },
+      (error) => setNotice(error.message),
+    );
+
     const unsubscribeMarketHistory = onSnapshot(
       query(collection(db, "marketHistory"), orderBy("timestamp", "asc")),
       (snapshot) => {
@@ -1245,6 +1319,7 @@ export default function Home() {
       unsubscribeMarkets();
       unsubscribeOrders();
       unsubscribeTrades();
+      unsubscribeShortPositions();
       unsubscribeMarketHistory();
       unsubscribeBalances();
       unsubscribePublicHoldings();
@@ -1732,6 +1807,10 @@ export default function Home() {
     historySnapshot.docs
       .filter((historyDoc) => historyDoc.data().marketId === assetId)
       .forEach((historyDoc) => batch.delete(doc(db, "marketHistory", historyDoc.id)));
+    const shortPositionsSnapshot = await getDocs(query(collection(db, "shortPositions")));
+    shortPositionsSnapshot.docs
+      .filter((positionDoc) => positionDoc.data().assetId === assetId)
+      .forEach((positionDoc) => batch.delete(doc(db, "shortPositions", positionDoc.id)));
 
     batch.delete(doc(db, "markets", assetId));
     await batch.commit();
@@ -1861,6 +1940,7 @@ export default function Home() {
       privateHoldingsSnapshot,
       historySnapshot,
       suggestionsSnapshot,
+      shortPositionsSnapshot,
     ] = await Promise.all([
       getDocs(collection(db, "markets")),
       getDocs(collection(db, "orders")),
@@ -1870,6 +1950,7 @@ export default function Home() {
       getDocs(collection(db, "users", authUser.uid, "holdings")),
       getDocs(collection(db, "marketHistory")),
       getDocs(collection(db, "suggestions")),
+      getDocs(collection(db, "shortPositions")),
     ]);
     const batch = writeBatch(db);
 
@@ -1878,6 +1959,7 @@ export default function Home() {
     tradesSnapshot.docs.forEach((tradeDoc) => batch.delete(doc(db, "trades", tradeDoc.id)));
     historySnapshot.docs.forEach((historyDoc) => batch.delete(doc(db, "marketHistory", historyDoc.id)));
     suggestionsSnapshot.docs.forEach((suggestionDoc) => batch.delete(doc(db, "suggestions", suggestionDoc.id)));
+    shortPositionsSnapshot.docs.forEach((positionDoc) => batch.delete(doc(db, "shortPositions", positionDoc.id)));
     holdingsSnapshot.docs.forEach((holdingDoc) => batch.delete(doc(db, "holdings", holdingDoc.id)));
     privateHoldingsSnapshot.docs.forEach((holdingDoc) =>
       batch.delete(doc(db, "users", authUser.uid, "holdings", holdingDoc.id)),
@@ -1923,6 +2005,7 @@ export default function Home() {
     setOrders([]);
     setTrades([]);
     setMarketHistory([]);
+    setShortPositions([]);
     setSuggestions([]);
     setHoldings({});
     setPublicHoldings({});
@@ -1965,6 +2048,23 @@ export default function Home() {
   const bestBid = buyOrders[0]?.limitPrice;
   const bestAsk = sellOrders[0]?.limitPrice;
   const selectedHolding = selectedAsset ? holdings[selectedAsset.id] ?? { quantity: 0, averagePrice: 0 } : { quantity: 0, averagePrice: 0 };
+  const currentUserId = authUser?.uid ?? "";
+  const shortQuantity = Math.max(1, Math.floor(numericInputValue(quantity, 1)));
+  const shortEntryPrice = Math.max(1, Math.floor(selectedAsset?.lastPrice ?? 1));
+  const shortRequiredCollateral = shortEntryPrice * shortQuantity;
+  const shortEstimatedLiquidationPrice = shortLiquidationPrice(
+    shortEntryPrice,
+    shortQuantity,
+    shortRequiredCollateral,
+    SHORT_MAINTENANCE_BUFFER_RATE,
+  );
+  const selectedAssetOpenShorts = selectedAsset
+    ? shortPositions.filter((position) =>
+        position.userId === currentUserId &&
+        position.assetId === selectedAsset.id &&
+        position.status === "open",
+      )
+    : [];
   const selectedDropLimitRemaining = selectedAsset
     ? Math.max(0, dropPurchaseLimit(selectedAsset) - selectedHolding.quantity)
     : 0;
@@ -2176,6 +2276,317 @@ export default function Home() {
       setNotice("No eligible survey events for this drop cycle.");
     }
   }, [now, nextDropTime, processingDropCycle, upcomingDrops]);
+
+  async function openShort(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!authUser) {
+      setNotice("Sign in required.");
+      return;
+    }
+
+    if (!selectedAsset) {
+      setNotice("No market selected.");
+      return;
+    }
+
+    if (selectedAsset.activeTradableSupply <= 0) {
+      setNotice("No purchased supply is tradable yet.");
+      return;
+    }
+
+    if (!coinsReady) {
+      setNotice("Loading balance.");
+      return;
+    }
+
+    const cleanQuantity = Math.max(1, Math.floor(numericInputValue(quantity, 1)));
+    const entryPrice = Math.max(1, Math.floor(selectedAsset.lastPrice));
+    const collateral = entryPrice * cleanQuantity;
+
+    if (coins < collateral) {
+      setNotice("Not enough tokens for collateral.");
+      return;
+    }
+
+    const db = getFirebaseDb();
+
+    if (!db) {
+      setNotice("Database unavailable.");
+      return;
+    }
+
+    const positionRef = doc(collection(db, "shortPositions"));
+    const userRef = doc(db, "users", authUser.uid);
+    const balanceRef = doc(db, "balances", authUser.uid);
+    const marketRef = doc(db, "markets", selectedAsset.id);
+
+    try {
+      const nextCoins = await runTransaction(db, async (transaction) => {
+        const [userSnapshot, balanceSnapshot, marketSnapshot] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(balanceRef),
+          transaction.get(marketRef),
+        ]);
+        const marketData = marketSnapshot.data();
+        const livePrice = typeof marketData?.lastPrice === "number" ? Math.max(1, Math.floor(marketData.lastPrice)) : entryPrice;
+        const liveQuantity = cleanQuantity;
+        const liveCollateral = livePrice * liveQuantity;
+        const liveLiquidationPrice = shortLiquidationPrice(
+          livePrice,
+          liveQuantity,
+          liveCollateral,
+          SHORT_MAINTENANCE_BUFFER_RATE,
+        );
+        const availableCoins =
+          (typeof balanceSnapshot.data()?.coins === "number" ? balanceSnapshot.data()?.coins : undefined) ??
+          (typeof userSnapshot.data()?.coins === "number" ? userSnapshot.data()?.coins : 0);
+
+        if (!marketSnapshot.exists() || livePrice <= 0 || liveQuantity <= 0 || liveCollateral <= 0) {
+          throw new Error("Market unavailable.");
+        }
+
+        if (availableCoins < liveCollateral) {
+          throw new Error("Not enough tokens for collateral.");
+        }
+
+        const updatedCoins = availableCoins - liveCollateral;
+        const userData = userSnapshot.data();
+        const balanceData = balanceSnapshot.data();
+        const displayName = authUser.displayName ?? userData?.displayName ?? balanceData?.displayName ?? "";
+        const email = authUser.email ?? userData?.email ?? balanceData?.email ?? "";
+
+        transaction.set(
+          userRef,
+          {
+            coins: updatedCoins,
+            displayName,
+            email,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(
+          balanceRef,
+          {
+            coins: updatedCoins,
+            displayName,
+            email,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(positionRef, {
+          userId: authUser.uid,
+          assetId: selectedAsset.id,
+          quantity: liveQuantity,
+          entryPrice: livePrice,
+          collateral: liveCollateral,
+          liquidationPrice: liveLiquidationPrice,
+          maintenanceBufferRate: SHORT_MAINTENANCE_BUFFER_RATE,
+          status: "open",
+          openedAt: serverTimestamp(),
+        });
+
+        return updatedCoins;
+      });
+
+      setCoins(nextCoins);
+      setQuantity(1);
+      setNotice(`Short opened. ${currency(collateral)} locked as collateral.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Short failed.");
+    }
+  }
+
+  async function closeShort(position: ShortPosition) {
+    if (!authUser) {
+      setNotice("Sign in required.");
+      return;
+    }
+
+    if (position.userId !== authUser.uid) {
+      setNotice("You can only close your own short.");
+      return;
+    }
+
+    if (position.status !== "open") {
+      setNotice("Short is already closed.");
+      return;
+    }
+
+    const asset = assets.find((item) => item.id === position.assetId);
+
+    if (!asset) {
+      setNotice("Market unavailable.");
+      return;
+    }
+
+    const db = getFirebaseDb();
+
+    if (!db) {
+      setNotice("Database unavailable.");
+      return;
+    }
+
+    const positionRef = doc(db, "shortPositions", position.id);
+    const userRef = doc(db, "users", authUser.uid);
+    const balanceRef = doc(db, "balances", authUser.uid);
+    const marketRef = doc(db, "markets", position.assetId);
+
+    try {
+      const result = await runTransaction(db, async (transaction) => {
+        const [positionSnapshot, userSnapshot, balanceSnapshot, marketSnapshot] = await Promise.all([
+          transaction.get(positionRef),
+          transaction.get(userRef),
+          transaction.get(balanceRef),
+          transaction.get(marketRef),
+        ]);
+        const positionData = positionSnapshot.data();
+        const marketData = marketSnapshot.data();
+
+        if (!positionSnapshot.exists() || !positionData) {
+          throw new Error("Short unavailable.");
+        }
+
+        if (positionData.userId !== authUser.uid) {
+          throw new Error("You can only close your own short.");
+        }
+
+        if (positionData.status !== "open") {
+          throw new Error("Short is already closed.");
+        }
+
+        const closePrice = typeof marketData?.lastPrice === "number" ? Math.max(1, marketData.lastPrice) : asset.lastPrice;
+        const quantityValue = typeof positionData.quantity === "number" ? positionData.quantity : position.quantity;
+        const entryPriceValue = typeof positionData.entryPrice === "number" ? positionData.entryPrice : position.entryPrice;
+        const collateralValue = typeof positionData.collateral === "number" ? positionData.collateral : position.collateral;
+        const bufferRate = typeof positionData.maintenanceBufferRate === "number"
+          ? positionData.maintenanceBufferRate
+          : SHORT_MAINTENANCE_BUFFER_RATE;
+        const pnl = shortPnL(entryPriceValue, closePrice, quantityValue);
+        const equity = collateralValue + pnl;
+        const shouldLiquidate = equity <= collateralValue * bufferRate;
+        const availableCoins =
+          (typeof balanceSnapshot.data()?.coins === "number" ? balanceSnapshot.data()?.coins : undefined) ??
+          (typeof userSnapshot.data()?.coins === "number" ? userSnapshot.data()?.coins : 0);
+        const displayName = authUser.displayName ?? userSnapshot.data()?.displayName ?? balanceSnapshot.data()?.displayName ?? "";
+        const email = authUser.email ?? userSnapshot.data()?.email ?? balanceSnapshot.data()?.email ?? "";
+
+        if (shouldLiquidate) {
+          transaction.set(
+            positionRef,
+            {
+              status: "liquidated",
+              closePrice,
+              realizedPnL: pnl,
+              returnedCollateral: 0,
+              closedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+
+          return { nextCoins: availableCoins, returnedCollateral: 0, status: "liquidated" as ShortPositionStatus };
+        }
+
+        const returnedCollateral = Math.max(0, collateralValue + pnl);
+        const nextCoins = Math.max(0, availableCoins + returnedCollateral);
+
+        transaction.set(
+          userRef,
+          {
+            coins: nextCoins,
+            displayName,
+            email,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(
+          balanceRef,
+          {
+            coins: nextCoins,
+            displayName,
+            email,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(
+          positionRef,
+          {
+            status: "closed",
+            closePrice,
+            realizedPnL: pnl,
+            returnedCollateral,
+            closedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        return { nextCoins, returnedCollateral, status: "closed" as ShortPositionStatus };
+      });
+
+      setCoins(result.nextCoins);
+      setNotice(
+        result.status === "liquidated"
+          ? "Short liquidated. Collateral absorbed the loss."
+          : `Short closed. Returned ${currency(result.returnedCollateral)}.`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Close short failed.");
+    }
+  }
+
+  async function liquidateShort(position: ShortPosition, asset: Asset) {
+    if (!authUser || position.status !== "open" || position.userId !== authUser.uid) {
+      return;
+    }
+
+    const equity = shortEquity(position, asset.lastPrice);
+
+    if (equity > shortMaintenanceMargin(position)) {
+      return;
+    }
+
+    const db = getFirebaseDb();
+
+    if (!db) {
+      return;
+    }
+
+    const closePrice = Math.max(asset.lastPrice, position.liquidationPrice);
+    const pnl = shortPnL(position.entryPrice, closePrice, position.quantity);
+
+    try {
+      await updateDoc(doc(db, "shortPositions", position.id), {
+        status: "liquidated",
+        closePrice,
+        realizedPnL: pnl,
+        returnedCollateral: 0,
+        closedAt: serverTimestamp(),
+      });
+      setNotice("Short liquidated. Collateral absorbed the loss.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Liquidation check failed.");
+    }
+  }
+
+  useEffect(() => {
+    if (!authUser || !assets.length || !shortPositions.length) {
+      return;
+    }
+
+    shortPositions
+      .filter((position) => position.userId === authUser.uid && position.status === "open")
+      .forEach((position) => {
+        const asset = assets.find((item) => item.id === position.assetId);
+
+        if (asset) {
+          void liquidateShort(position, asset);
+        }
+      });
+  }, [authUser, assets, shortPositions]);
 
   async function placeOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3203,15 +3614,20 @@ export default function Home() {
 
             {activeTab === "trading" ? (
             <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr]">
-              <form onSubmit={placeOrder} className="rounded-3xl border border-border p-4">
+              <form onSubmit={tradeMode === "short" ? openShort : placeOrder} className="rounded-3xl border border-border p-4">
                 <div className="flex rounded-2xl bg-surface-warm p-1">
-                  {(["buy", "sell"] as Side[]).map((option) => (
+                  {(["buy", "sell", "short"] as TradeMode[]).map((option) => (
                     <button
                       key={option}
                       type="button"
-                      onClick={() => setSide(option)}
+                      onClick={() => {
+                        setTradeMode(option);
+                        if (option !== "short") {
+                          setSide(option);
+                        }
+                      }}
                       className={`flex-1 rounded-xl px-3 py-2 text-sm font-black capitalize transition ${
-                        side === option ? "bg-brand shadow-card" : "text-muted"
+                        tradeMode === option ? "bg-brand shadow-card" : "text-muted"
                       }`}
                     >
                       {option}
@@ -3230,6 +3646,17 @@ export default function Home() {
                       className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-base outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
                     />
                   </label>
+                  {tradeMode === "short" ? (
+                  <label className="text-sm font-bold text-muted">
+                    Current price
+                    <input
+                      value={shortEntryPrice}
+                      readOnly
+                      type="number"
+                      className="mt-2 w-full rounded-2xl border border-border bg-surface-warm px-4 py-3 text-base outline-none"
+                    />
+                  </label>
+                  ) : (
                   <label className="text-sm font-bold text-muted">
                     Limit price
                     <input
@@ -3240,8 +3667,27 @@ export default function Home() {
                       className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-base outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
                     />
                   </label>
+                  )}
                 </div>
 
+                {tradeMode === "short" ? (
+                <>
+                <div className="mt-4 rounded-2xl bg-surface-warm p-3 text-sm leading-6 text-muted">
+                  <p>Required collateral: {currency(shortRequiredCollateral)}</p>
+                  <p>Estimated liquidation price: {currency(shortEstimatedLiquidationPrice)}</p>
+                  <p>Available tokens: {coinsReady ? currency(coins) : "Loading"}</p>
+                  <p>Maintenance buffer: {(SHORT_MAINTENANCE_BUFFER_RATE * 100).toFixed(0)}%</p>
+                </div>
+                <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-semibold leading-6 text-danger">
+                  Shorting gains tokens if the price falls and loses tokens if the price rises. Your maximum loss is your locked collateral.
+                </p>
+                {coinsReady && coins < shortRequiredCollateral ? (
+                  <p className="mt-3 rounded-2xl bg-surface-warm p-3 text-sm font-bold text-danger">
+                    Not enough tokens for collateral.
+                  </p>
+                ) : null}
+                </>
+                ) : (
                 <div className="mt-4 rounded-2xl bg-surface-warm p-3 text-sm leading-6 text-muted">
                   <p>Best bid: {bestBid ? currency(bestBid) : "none"}</p>
                   <p>Best ask: {bestAsk ? currency(bestAsk) : "none"}</p>
@@ -3249,9 +3695,13 @@ export default function Home() {
                   <p>Estimated max value: {currency(numericInputValue(quantity) * numericInputValue(limitPrice))}</p>
                   <p>Your shares: {selectedHolding.quantity}</p>
                 </div>
+                )}
 
-                <button className="mt-4 w-full rounded-2xl bg-brand px-4 py-3 font-black text-foreground transition hover:-translate-y-0.5 hover:bg-brand-hover">
-                  Place {side} order
+                <button
+                  disabled={tradeMode === "short" && (!coinsReady || coins < shortRequiredCollateral)}
+                  className="mt-4 w-full rounded-2xl bg-brand px-4 py-3 font-black text-foreground transition hover:-translate-y-0.5 hover:bg-brand-hover disabled:translate-y-0 disabled:bg-quiet disabled:text-white"
+                >
+                  {tradeMode === "short" ? "Confirm Short" : `Place ${side} order`}
                 </button>
                 <p className="mt-3 min-h-12 rounded-2xl bg-surface-warm p-3 text-sm font-semibold leading-6 text-muted">
                   {notice}
@@ -3333,6 +3783,46 @@ export default function Home() {
                       </p>
                     )}
                   </div>
+                </div>
+              </div>
+              <div className="rounded-3xl border border-border p-4 lg:col-span-2">
+                <h3 className="font-black">Open Shorts</h3>
+                <div className="mt-3 grid gap-3">
+                  {selectedAssetOpenShorts.length ? selectedAssetOpenShorts.map((position) => {
+                    const asset = assets.find((item) => item.id === position.assetId);
+                    const currentPrice = asset?.lastPrice ?? position.entryPrice;
+                    const unrealizedPnL = shortPnL(position.entryPrice, currentPrice, position.quantity);
+                    const equity = position.collateral + unrealizedPnL;
+
+                    return (
+                      <div key={position.id} className="grid gap-3 rounded-2xl bg-surface-warm p-4 text-sm md:grid-cols-[1fr_auto] md:items-center">
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                          <p><span className="font-bold">Asset:</span> {asset?.name ?? "Market"}</p>
+                          <p><span className="font-bold">Qty:</span> {position.quantity}</p>
+                          <p><span className="font-bold">Entry:</span> {currency(position.entryPrice)}</p>
+                          <p><span className="font-bold">Current:</span> {currency(currentPrice)}</p>
+                          <p className={unrealizedPnL >= 0 ? "text-positive" : "text-danger"}>
+                            <span className="font-bold">PnL:</span> {unrealizedPnL >= 0 ? "+" : ""}{currency(unrealizedPnL)}
+                          </p>
+                          <p><span className="font-bold">Collateral:</span> {currency(position.collateral)}</p>
+                          <p><span className="font-bold">Equity:</span> {currency(Math.max(0, equity))}</p>
+                          <p><span className="font-bold">Liq:</span> {currency(position.liquidationPrice)}</p>
+                          <p><span className="font-bold">Status:</span> {position.status}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void closeShort(position)}
+                          className="rounded-2xl bg-foreground px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
+                        >
+                          Close Short
+                        </button>
+                      </div>
+                    );
+                  }) : (
+                    <p className="rounded-2xl bg-surface-warm px-3 py-3 text-sm text-muted">
+                      No open shorts for this market.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

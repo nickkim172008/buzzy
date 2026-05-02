@@ -196,6 +196,73 @@ service cloud.firestore {
         && request.resource.data.quantity >= 1;
     }
 
+    match /shortPositions/{positionId} {
+      allow read: if request.auth != null;
+      allow delete: if isAdmin()
+        || (request.auth != null && resource.data.userId == request.auth.uid);
+
+      allow create: if request.auth != null
+        && validShortPosition()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == "open"
+        && !request.resource.data.keys().hasAny([
+          "closedAt",
+          "closePrice",
+          "realizedPnL",
+          "returnedCollateral"
+        ]);
+
+      allow update: if request.auth != null
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && validShortPosition()
+        && resource.data.status == "open"
+        && request.resource.data.status in ["open", "closed", "liquidated"];
+
+      function validShortPosition() {
+        return request.resource.data.keys().hasOnly([
+            "userId",
+            "assetId",
+            "quantity",
+            "entryPrice",
+            "collateral",
+            "liquidationPrice",
+            "maintenanceBufferRate",
+            "status",
+            "openedAt",
+            "closedAt",
+            "closePrice",
+            "realizedPnL",
+            "returnedCollateral"
+          ])
+          && request.resource.data.userId is string
+          && request.resource.data.assetId is string
+          && request.resource.data.quantity is number
+          && request.resource.data.quantity >= 1
+          && request.resource.data.entryPrice is number
+          && request.resource.data.entryPrice >= 1
+          && request.resource.data.collateral is number
+          && request.resource.data.collateral >= 1
+          && request.resource.data.liquidationPrice is number
+          && request.resource.data.liquidationPrice >= request.resource.data.entryPrice
+          && request.resource.data.maintenanceBufferRate is number
+          && request.resource.data.maintenanceBufferRate > 0
+          && request.resource.data.maintenanceBufferRate < 1
+          && request.resource.data.status in ["open", "closed", "liquidated"]
+          && request.resource.data.openedAt is timestamp
+          && (!request.resource.data.keys().hasAny(["closedAt"])
+            || request.resource.data.closedAt is timestamp)
+          && (!request.resource.data.keys().hasAny(["closePrice"])
+            || (request.resource.data.closePrice is number
+              && request.resource.data.closePrice >= 1))
+          && (!request.resource.data.keys().hasAny(["realizedPnL"])
+            || request.resource.data.realizedPnL is number)
+          && (!request.resource.data.keys().hasAny(["returnedCollateral"])
+            || (request.resource.data.returnedCollateral is number
+              && request.resource.data.returnedCollateral >= 0));
+      }
+    }
+
     match /marketHistory/{historyId} {
       allow read: if request.auth != null;
       allow delete: if request.auth != null;
