@@ -1,0 +1,104 @@
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\nutak\buzzly\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\nutak\buzzly\my-app\package-lock.json
+
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[browser] Uncaught ReferenceError: proposals is not defined
+    at Home (app/page.tsx:529:16)
+  527 |             <h2 className="text-lg font-bold">Proposed Trades</h2>
+  528 |             <div className="mt-4 space-y-3">
+> 529 |               {proposals.map((proposal) => (
+      |                ^
+  530 |                 <div key={proposal.id} className="rounded-md border border-[#e7dfd0] p-3">
+  531 |                   <div className="flex items-start justify-between gap-3">
+  532 |                     <div>
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.
+[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
+FirebaseError: Missing or insufficient permissions.

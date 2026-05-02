@@ -427,24 +427,6 @@ export default function Home() {
       (error) => setNotice(error.message),
     );
 
-    const unsubscribeHoldings = onSnapshot(
-      collection(db, "users", authUser.uid, "holdings"),
-      (snapshot) => {
-        setHoldings(Object.fromEntries(snapshot.docs.map((holdingDoc) => {
-          const data = holdingDoc.data();
-
-          return [
-            holdingDoc.id,
-            {
-              quantity: typeof data.quantity === "number" ? data.quantity : 0,
-              averagePrice: typeof data.averagePrice === "number" ? data.averagePrice : 0,
-            } satisfies Holding,
-          ];
-        })));
-      },
-      (error) => setNotice(error.message),
-    );
-
     const unsubscribeBalances = onSnapshot(
       collection(db, "balances"),
       (snapshot) => {
@@ -499,6 +481,24 @@ export default function Home() {
             { quantity: holding.quantity, averagePrice: holding.averagePrice } satisfies Holding,
           ];
         })));
+
+        setHoldings(Object.fromEntries(snapshot.docs.flatMap((holdingDoc) => {
+          const data = holdingDoc.data();
+          const userId = typeof data.userId === "string" ? data.userId : "";
+          const marketId = typeof data.marketId === "string" ? data.marketId : "";
+
+          if (userId !== authUser.uid || !marketId) {
+            return [];
+          }
+
+          return [[
+            marketId,
+            {
+              quantity: typeof data.quantity === "number" ? data.quantity : 0,
+              averagePrice: typeof data.averagePrice === "number" ? data.averagePrice : 0,
+            } satisfies Holding,
+          ]];
+        })));
       },
       (error) => setNotice(error.message),
     );
@@ -507,7 +507,6 @@ export default function Home() {
       unsubscribeMarkets();
       unsubscribeOrders();
       unsubscribeTrades();
-      unsubscribeHoldings();
       unsubscribeBalances();
       unsubscribePublicHoldings();
     };
@@ -921,6 +920,94 @@ export default function Home() {
     await batch.commit();
     setOrders((current) => current.filter((item) => item.id !== orderId));
     setNotice(`Order cancelled.${refundText}`);
+  }
+
+  async function resetEconomy() {
+    if (!authUser) {
+      setNotice("Sign in required.");
+      return;
+    }
+
+    if (!window.confirm("Reset all markets, drops, trades, orders, portfolios, and coins?")) {
+      return;
+    }
+
+    const db = getFirebaseDb();
+
+    if (!db) {
+      setNotice("Database unavailable.");
+      return;
+    }
+
+    const [
+      marketsSnapshot,
+      ordersSnapshot,
+      tradesSnapshot,
+      holdingsSnapshot,
+      balancesSnapshot,
+      privateHoldingsSnapshot,
+    ] = await Promise.all([
+      getDocs(collection(db, "markets")),
+      getDocs(collection(db, "orders")),
+      getDocs(collection(db, "trades")),
+      getDocs(collection(db, "holdings")),
+      getDocs(collection(db, "balances")),
+      getDocs(collection(db, "users", authUser.uid, "holdings")),
+    ]);
+    const batch = writeBatch(db);
+
+    marketsSnapshot.docs.forEach((marketDoc) => batch.delete(doc(db, "markets", marketDoc.id)));
+    ordersSnapshot.docs.forEach((orderDoc) => batch.delete(doc(db, "orders", orderDoc.id)));
+    tradesSnapshot.docs.forEach((tradeDoc) => batch.delete(doc(db, "trades", tradeDoc.id)));
+    holdingsSnapshot.docs.forEach((holdingDoc) => batch.delete(doc(db, "holdings", holdingDoc.id)));
+    privateHoldingsSnapshot.docs.forEach((holdingDoc) =>
+      batch.delete(doc(db, "users", authUser.uid, "holdings", holdingDoc.id)),
+    );
+    balancesSnapshot.docs.forEach((balanceDoc) => {
+      const data = balanceDoc.data();
+
+      batch.set(
+        doc(db, "balances", balanceDoc.id),
+        {
+          coins: 0,
+          displayName: typeof data.displayName === "string" ? data.displayName : "",
+          email: typeof data.email === "string" ? data.email : "",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+    batch.set(
+      doc(db, "users", authUser.uid),
+      {
+        coins: 0,
+        displayName: authUser.displayName ?? "",
+        email: authUser.email ?? "",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    batch.set(
+      doc(db, "balances", authUser.uid),
+      {
+        coins: 0,
+        displayName: authUser.displayName ?? "",
+        email: authUser.email ?? "",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    await batch.commit();
+
+    setAssets([]);
+    setOrders([]);
+    setTrades([]);
+    setHoldings({});
+    setPublicHoldings({});
+    setCoins(0);
+    setSelectedAssetId("");
+    setNotice("Everything reset.");
   }
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId);
@@ -1774,6 +1861,12 @@ export default function Home() {
                 className="mt-4 w-full rounded-md bg-[#0a0a0a] px-4 py-3 font-bold text-white transition hover:bg-[#18181b]"
               >
                 Sign out
+              </button>
+              <button
+                onClick={() => void resetEconomy()}
+                className="mt-3 w-full rounded-md border border-[#dc2626] px-4 py-3 font-bold text-[#dc2626] transition hover:bg-[#fef2f2]"
+              >
+                Reset everything
               </button>
             </div>
           ) : null}
