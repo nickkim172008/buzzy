@@ -249,8 +249,7 @@ service cloud.firestore {
         && request.resource.data.voters[request.auth.uid] == true
         && request.resource.data.upvotes == resource.data.upvotes + 1;
 
-      allow delete: if request.auth != null
-        && resource.data.suggestedBy == request.auth.uid;
+      allow delete: if request.auth != null;
     }
   }
 }

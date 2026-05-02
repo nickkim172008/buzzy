@@ -22,7 +22,7 @@ type MarketLevel = "admin" | "community" | "private";
 type MarketStatus = "drop" | "trading";
 type Side = "buy" | "sell";
 type OrderStatus = "open" | "filled" | "partially_filled";
-type AppTab = "markets" | "suggest" | "survey" | "create" | "drop" | "timing" | "trading" | "portfolio" | "account";
+type AppTab = "markets" | "suggest" | "survey" | "create" | "drop" | "trading" | "portfolio" | "account";
 type ChartRange = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
 type ChartMode = "value" | "returns";
 
@@ -111,13 +111,15 @@ type PortfolioSlice = {
 
 type UpcomingDrop = {
   id: string;
+  marketId: string;
   title: string;
   description: string;
   releaseAt: number;
-  status: string;
+  status: "Active" | "Scheduled" | "Sold Out";
   limit: number;
   remaining: number;
   total: number;
+  price: number;
 };
 
 type MarketHistoryEvent =
@@ -168,7 +170,7 @@ const levelCopy: Record<
 };
 
 const STARTING_COINS = 0;
-const DROP_PURCHASE_LIMIT = 2;
+const DROP_PURCHASE_LIMIT_PERCENT = 0.05;
 const chartRanges: ChartRange[] = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"];
 
 const tabs: { id: AppTab; label: string; mark: string }[] = [
@@ -177,7 +179,6 @@ const tabs: { id: AppTab; label: string; mark: string }[] = [
   { id: "survey", label: "Survey", mark: "V" },
   { id: "create", label: "Create", mark: "+" },
   { id: "drop", label: "Drop", mark: "D" },
-  { id: "timing", label: "Timing", mark: "C" },
   { id: "trading", label: "Trade", mark: "T" },
   { id: "portfolio", label: "Portfolio", mark: "P" },
   { id: "account", label: "Account", mark: "A" },
@@ -240,15 +241,6 @@ function TabIcon({ id }: { id: AppTab }) {
     );
   }
 
-  if (id === "timing") {
-    return (
-      <svg {...iconProps}>
-        <path d="M12 7V12L15 14" />
-        <path d="M21 12A9 9 0 1 1 3 12A9 9 0 0 1 21 12Z" />
-      </svg>
-    );
-  }
-
   if (id === "trading") {
     return (
       <svg {...iconProps}>
@@ -303,6 +295,10 @@ function formatPercent(value: number) {
 
 function formatVolatility(value: number) {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function dropPurchaseLimit(asset: Pick<Asset, "totalSupply">) {
+  return Math.max(1, Math.floor(asset.totalSupply * DROP_PURCHASE_LIMIT_PERCENT));
 }
 
 function formatClock(ms: number) {
@@ -653,27 +649,57 @@ function PortfolioDonut({ slices }: { slices: PortfolioSlice[] }) {
   );
 }
 
-function DropTimingCard({ drop, now }: { drop: UpcomingDrop; now: number }) {
+function DropTimingCard({
+  drop,
+  now,
+  isSelected,
+  onSelect,
+}: {
+  drop: UpcomingDrop;
+  now: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
   const remainingMs = drop.releaseAt - now;
   const soldPercent = Math.min(100, Math.max(0, ((drop.total - drop.remaining) / Math.max(1, drop.total)) * 100));
+  const isScheduled = drop.status === "Scheduled";
 
   return (
-    <div className="rounded-[2rem] border border-border bg-surface p-5 shadow-card">
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`rounded-[2rem] border bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-lift ${
+        isSelected ? "border-brand ring-4 ring-brand/25" : "border-border"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xl font-black">{drop.title}</p>
           <p className="mt-1 text-sm leading-6 text-muted">{drop.description}</p>
         </div>
-        <span className="shrink-0 rounded-full bg-brand px-3 py-1 text-xs font-black">{drop.status}</span>
+        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+          isScheduled ? "bg-foreground text-white" : "bg-brand text-foreground"
+        }`}>
+          {drop.status}
+        </span>
       </div>
-      <div className="mt-5 rounded-3xl bg-foreground p-4 text-white">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/60">Time remaining</p>
-        <p className="mt-2 font-mono text-2xl font-black">{formatClock(remainingMs)}</p>
-      </div>
+      {isScheduled ? (
+        <div className="mt-5 rounded-3xl bg-foreground p-4 text-white">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/60">Drop unlocks in</p>
+          <p className="mt-2 font-mono text-2xl font-black">{formatClock(remainingMs)}</p>
+        </div>
+      ) : (
+        <div className="mt-5 rounded-3xl bg-brand p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-foreground/60">Live price</p>
+          <p className="mt-2 text-2xl font-black">{currency(drop.price)}</p>
+        </div>
+      )}
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         <div className="rounded-2xl bg-surface-warm p-3">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-quiet">Release</p>
-          <p className="mt-1 font-bold">{formatShortDate(drop.releaseAt)}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-quiet">
+            {isScheduled ? "Release" : "Status"}
+          </p>
+          <p className="mt-1 font-bold">{isScheduled ? formatShortDate(drop.releaseAt) : "Available now"}</p>
         </div>
         <div className="rounded-2xl bg-surface-warm p-3">
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-quiet">Limit</p>
@@ -689,7 +715,7 @@ function DropTimingCard({ drop, now }: { drop: UpcomingDrop; now: number }) {
           <div className="h-full rounded-full bg-brand" style={{ width: `${soldPercent}%` }} />
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1421,12 +1447,13 @@ export default function Home() {
     }
 
     const cleanQuantity = Math.max(1, Math.floor(dropQuantity));
-    const remainingUserLimit = Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity);
+    const userDropLimit = dropPurchaseLimit(selectedAsset);
+    const remainingUserLimit = Math.max(0, userDropLimit - selectedHolding.quantity);
     const buyQuantity = Math.min(cleanQuantity, selectedAsset.remainingDropSupply, remainingUserLimit);
     const totalCost = buyQuantity * selectedAsset.dropPrice;
 
     if (remainingUserLimit <= 0) {
-      setNotice(`Drop limit reached. Max ${DROP_PURCHASE_LIMIT} per user.`);
+      setNotice(`Drop limit reached. Max 5% of supply (${userDropLimit}) per user.`);
       return;
     }
 
@@ -1665,7 +1692,7 @@ export default function Home() {
       return;
     }
 
-    if (!window.confirm("Reset all markets, drops, trades, orders, portfolios, and coins?")) {
+    if (!window.confirm("Reset all markets, drops, trades, orders, portfolios, coins, and surveys?")) {
       return;
     }
 
@@ -1684,6 +1711,7 @@ export default function Home() {
       balancesSnapshot,
       privateHoldingsSnapshot,
       historySnapshot,
+      suggestionsSnapshot,
     ] = await Promise.all([
       getDocs(collection(db, "markets")),
       getDocs(collection(db, "orders")),
@@ -1692,6 +1720,7 @@ export default function Home() {
       getDocs(collection(db, "balances")),
       getDocs(collection(db, "users", authUser.uid, "holdings")),
       getDocs(collection(db, "marketHistory")),
+      getDocs(collection(db, "suggestions")),
     ]);
     const batch = writeBatch(db);
 
@@ -1699,6 +1728,7 @@ export default function Home() {
     ordersSnapshot.docs.forEach((orderDoc) => batch.delete(doc(db, "orders", orderDoc.id)));
     tradesSnapshot.docs.forEach((tradeDoc) => batch.delete(doc(db, "trades", tradeDoc.id)));
     historySnapshot.docs.forEach((historyDoc) => batch.delete(doc(db, "marketHistory", historyDoc.id)));
+    suggestionsSnapshot.docs.forEach((suggestionDoc) => batch.delete(doc(db, "suggestions", suggestionDoc.id)));
     holdingsSnapshot.docs.forEach((holdingDoc) => batch.delete(doc(db, "holdings", holdingDoc.id)));
     privateHoldingsSnapshot.docs.forEach((holdingDoc) =>
       batch.delete(doc(db, "users", authUser.uid, "holdings", holdingDoc.id)),
@@ -1744,6 +1774,7 @@ export default function Home() {
     setOrders([]);
     setTrades([]);
     setMarketHistory([]);
+    setSuggestions([]);
     setHoldings({});
     setPublicHoldings({});
     setCoins(0);
@@ -1771,8 +1802,8 @@ export default function Home() {
   const bestAsk = sellOrders[0]?.limitPrice;
   const selectedHolding = selectedAsset ? holdings[selectedAsset.id] ?? { quantity: 0, averagePrice: 0 } : { quantity: 0, averagePrice: 0 };
   const selectedDropLimitRemaining = selectedAsset
-    ? Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity)
-    : DROP_PURCHASE_LIMIT;
+    ? Math.max(0, dropPurchaseLimit(selectedAsset) - selectedHolding.quantity)
+    : 0;
   const visibleSuggestions = suggestions
     .filter((suggestion) => {
       const queryText = surveySearch.trim().toLowerCase();
@@ -1853,16 +1884,19 @@ export default function Home() {
         releaseAt += 3 * 86_400_000;
       }
       const remainingRatio = asset.remainingDropSupply / Math.max(1, asset.totalSupply);
+      const isActiveDrop = index === 0 && asset.remainingDropSupply > 0;
 
       return {
         id: asset.id,
+        marketId: asset.id,
         title: asset.name,
         description: asset.description || asset.category,
         releaseAt,
-        status: remainingRatio <= 0 ? "Sold Out" : index === 0 ? "Live Soon" : "Upcoming",
-        limit: DROP_PURCHASE_LIMIT,
+        status: remainingRatio <= 0 ? "Sold Out" : isActiveDrop ? "Active" : "Scheduled",
+        limit: dropPurchaseLimit(asset),
         remaining: asset.remainingDropSupply,
         total: asset.totalSupply,
+        price: asset.dropPrice,
       };
     });
 
@@ -2539,66 +2573,38 @@ export default function Home() {
             </div>
           ) : null}
 
-          {activeTab === "drop" && activeDrops.length ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {activeDrops.map((asset) => (
-                <button
-                  key={asset.id}
-                  onClick={() => {
-                    setSelectedAssetId(asset.id);
-                    setLimitPrice(asset.lastPrice);
-                  }}
-                  className={`rounded-[1.75rem] border bg-surface p-5 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-lift ${
-                    selectedAsset?.id === asset.id ? "border-brand ring-4 ring-brand/25" : "border-border"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold">{asset.name}</p>
-                      <p className="text-sm text-muted">{asset.category}</p>
-                    </div>
-                    <span className="rounded-full bg-brand px-2 py-1 text-xs font-black text-foreground">
-                      Drop
-                    </span>
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-quiet">Price</p>
-                      <p className="font-bold">{asset.dropPrice}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-quiet">Left</p>
-                      <p className="font-bold">{asset.remainingDropSupply}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-quiet">Supply</p>
-                      <p className="font-bold">{asset.totalSupply}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {activeTab === "timing" ? (
+          {activeTab === "drop" ? (
             <div className="space-y-5">
               <div className="rounded-[2rem] border border-border bg-surface p-6 shadow-card">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h2 className="text-3xl font-black">Drops Timing</h2>
-                    <p className="mt-1 text-sm text-muted">Upcoming releases, countdowns, limits, and remaining supply.</p>
+                    <h2 className="text-3xl font-black">Drops</h2>
+                    <p className="mt-1 text-sm text-muted">Active drops and scheduled releases in one place.</p>
                   </div>
                   <span className="w-fit rounded-full bg-brand px-3 py-1 text-xs font-black">
-                    {upcomingDrops.length} queued
+                    {upcomingDrops.filter((drop) => drop.status === "Active").length} active
                   </span>
                 </div>
               </div>
-              <div className="grid gap-4 xl:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                 {upcomingDrops.length ? upcomingDrops.map((drop) => (
-                  <DropTimingCard key={drop.id} drop={drop} now={now} />
+                  <DropTimingCard
+                    key={drop.id}
+                    drop={drop}
+                    now={now}
+                    isSelected={selectedAsset?.id === drop.marketId}
+                    onSelect={() => {
+                      if (drop.status !== "Active") {
+                        setNotice(`${drop.title} is scheduled for ${formatShortDate(drop.releaseAt)}.`);
+                        return;
+                      }
+                      setSelectedAssetId(drop.marketId);
+                      setLimitPrice(drop.price);
+                    }}
+                  />
                 )) : (
                   <p className="rounded-2xl bg-surface-warm px-4 py-3 text-sm text-muted">
-                    No upcoming drops yet. Create a drop market to schedule one.
+                    No drops yet. Create a drop market to schedule one.
                   </p>
                 )}
               </div>
@@ -2746,7 +2752,7 @@ export default function Home() {
                     <div className="rounded-2xl bg-surface-warm p-3 text-sm leading-6 text-muted">
                       <p>Price: {currency(visibleAsset.dropPrice)}</p>
                       <p>Total: {currency(Math.min(dropQuantity, selectedDropLimitRemaining, visibleAsset.remainingDropSupply) * visibleAsset.dropPrice)}</p>
-                      <p>Limit: {DROP_PURCHASE_LIMIT} per user</p>
+                      <p>Limit: 5% per user ({dropPurchaseLimit(visibleAsset)} max)</p>
                       <p>Remaining: {visibleAsset.remainingDropSupply}</p>
                     </div>
                   </div>
