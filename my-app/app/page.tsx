@@ -1233,9 +1233,12 @@ export default function Home() {
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId);
   const activeDrops = assets.filter((asset) => asset.status === "drop" && asset.remainingDropSupply > 0);
+  const tradingMarkets = assets.filter((asset) => asset.status === "trading");
   const portfolioAssets = assets.filter((asset) => (holdings[asset.id]?.quantity ?? 0) > 0);
   const visibleAsset =
     activeTab === "drop" && selectedAsset && !activeDrops.some((asset) => asset.id === selectedAsset.id)
+      ? undefined
+      : activeTab === "trading" && selectedAsset?.status !== "trading"
       ? undefined
       : selectedAsset;
   const selectedAssetOrderId = selectedAsset?.id ?? "";
@@ -1972,6 +1975,71 @@ export default function Home() {
                   </div>
                 </button>
               ))}
+            </div>
+          ) : null}
+
+          {activeTab === "trading" ? (
+            <div className="rounded-[2rem] border border-border bg-surface p-6 shadow-card">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-black">Active Trades</h2>
+                  <p className="mt-1 text-sm text-muted">Select a live market, then choose buy or sell below.</p>
+                </div>
+                <span className="w-fit rounded-full bg-brand px-3 py-1 text-xs font-black">
+                  {tradingMarkets.length} live
+                </span>
+              </div>
+
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {tradingMarkets.length ? tradingMarkets.map((asset) => {
+                  const assetChange = asset.previousPrice
+                    ? ((asset.lastPrice - asset.previousPrice) / asset.previousPrice) * 100
+                    : 0;
+                  const assetBuyOrders = getOrderBook(orders, asset.id, "buy");
+                  const assetSellOrders = getOrderBook(orders, asset.id, "sell");
+
+                  return (
+                    <button
+                      key={asset.id}
+                      onClick={() => {
+                        setSelectedAssetId(asset.id);
+                        setLimitPrice(asset.lastPrice);
+                      }}
+                      className={`rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lift ${
+                        selectedAsset?.id === asset.id ? "border-brand bg-surface-warm ring-4 ring-brand/25" : "border-border bg-background"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-black">{asset.name}</p>
+                          <p className="mt-1 text-sm text-muted">{asset.category}</p>
+                        </div>
+                        <span className={`shrink-0 text-sm font-black ${assetChange >= 0 ? "text-positive" : "text-danger"}`}>
+                          {formatPercent(assetChange)}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-quiet">Last</p>
+                          <p className="font-bold">{asset.lastPrice}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-quiet">Bid</p>
+                          <p className="font-bold">{assetBuyOrders[0]?.limitPrice ?? "none"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-quiet">Ask</p>
+                          <p className="font-bold">{assetSellOrders[0]?.limitPrice ?? "none"}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                }) : (
+                  <p className="rounded-2xl bg-surface-warm px-4 py-3 text-sm text-muted">
+                    No markets are trading yet. Buy from an active drop first to move it into trading.
+                  </p>
+                )}
+              </div>
             </div>
           ) : null}
 
