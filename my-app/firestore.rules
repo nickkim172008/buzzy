@@ -255,6 +255,7 @@ service cloud.firestore {
           "name",
           "category",
           "reason",
+          "color",
           "suggestedBy",
           "suggestedByName",
           "upvotes",
@@ -272,10 +273,11 @@ service cloud.firestore {
           "Public Figure",
           "Sports",
           "Meme",
-          "Private"
+          "Miscellaneous"
         ]
         && request.resource.data.reason is string
         && request.resource.data.reason.size() <= 300
+        && request.resource.data.color is string
         && request.resource.data.suggestedBy == request.auth.uid
         && request.resource.data.suggestedByName is string
         && request.resource.data.suggestedByName.size() <= 80

@@ -11,94 +11,86 @@ FirebaseError: Missing or insufficient permissions.
 FirebaseError: Missing or insufficient permissions.
 [browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
 FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
+⨯ ReferenceError: DROP_PURCHASE_LIMIT is not defined
+    at Home (app\page.tsx:1801:7)
+  1799 |   const selectedDropLimitRemaining = selectedAsset
+  1800 |     ? Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity)
+> 1801 |     : DROP_PURCHASE_LIMIT;
+       |       ^
+  1802 |   const visibleSuggestions = suggestions
+  1803 |     .filter((suggestion) => {
+  1804 |       const queryText = surveySearch.trim().toLowerCase(); {
+  digest: '2165539328'
+}
 ⚠ Fast Refresh had to perform a full reload due to a runtime error.
 ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ ReferenceError: DROP_PURCHASE_LIMIT is not defined
+    at Home (app\page.tsx:1801:7)
+  1799 |   const selectedDropLimitRemaining = selectedAsset
+  1800 |     ? Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity)
+> 1801 |     : DROP_PURCHASE_LIMIT;
+       |       ^
+  1802 |   const visibleSuggestions = suggestions
+  1803 |     .filter((suggestion) => {
+  1804 |       const queryText = surveySearch.trim().toLowerCase(); {
+  digest: '2165539328'
+}
+⨯ ReferenceError: DROP_PURCHASE_LIMIT is not defined
+    at Home (app\page.tsx:1802:7)
+  1800 |   const selectedDropLimitRemaining = selectedAsset
+  1801 |     ? Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity)
+> 1802 |     : DROP_PURCHASE_LIMIT;
+       |       ^
+  1803 |   const visibleSuggestions = suggestions
+  1804 |     .filter((suggestion) => {
+  1805 |       const queryText = surveySearch.trim().toLowerCase(); {
+  digest: '2165539328'
+}
 ⚠ Fast Refresh had to perform a full reload due to a runtime error.
 ⚠ Fast Refresh had to perform a full reload due to a runtime error.
-[browser] Uncaught ReferenceError: proposals is not defined
-    at Home (app/page.tsx:529:16)
-  527 |             <h2 className="text-lg font-bold">Proposed Trades</h2>
-  528 |             <div className="mt-4 space-y-3">
-> 529 |               {proposals.map((proposal) => (
-      |                ^
-  530 |                 <div key={proposal.id} className="rounded-md border border-[#e7dfd0] p-3">
-  531 |                   <div className="flex items-start justify-between gap-3">
-  532 |                     <div>
+⨯ ReferenceError: DROP_PURCHASE_LIMIT is not defined
+    at Home (app\page.tsx:1802:7)
+  1800 |   const selectedDropLimitRemaining = selectedAsset
+  1801 |     ? Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity)
+> 1802 |     : DROP_PURCHASE_LIMIT;
+       |       ^
+  1803 |   const visibleSuggestions = suggestions
+  1804 |     .filter((suggestion) => {
+  1805 |       const queryText = surveySearch.trim().toLowerCase(); {
+  digest: '2165539328'
+}
+⨯ ReferenceError: DROP_PURCHASE_LIMIT is not defined
+    at Home (app\page.tsx:1806:7)
+  1804 |   const selectedDropLimitRemaining = selectedAsset
+  1805 |     ? Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity)
+> 1806 |     : DROP_PURCHASE_LIMIT;
+       |       ^
+  1807 |   const visibleSuggestions = suggestions
+  1808 |     .filter((suggestion) => {
+  1809 |       const queryText = surveySearch.trim().toLowerCase(); {
+  digest: '2165539328'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ ReferenceError: DROP_PURCHASE_LIMIT is not defined
+    at Home (app\page.tsx:1806:7)
+  1804 |   const selectedDropLimitRemaining = selectedAsset
+  1805 |     ? Math.max(0, DROP_PURCHASE_LIMIT - selectedHolding.quantity)
+> 1806 |     : DROP_PURCHASE_LIMIT;
+       |       ^
+  1807 |   const visibleSuggestions = suggestions
+  1808 |     .filter((suggestion) => {
+  1809 |       const queryText = surveySearch.trim().toLowerCase(); {
+  digest: '2165539328'
+}
 ⚠ Fast Refresh had to perform a full reload due to a runtime error.
 ⚠ Fast Refresh had to perform a full reload due to a runtime error.
 [browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
 FirebaseError: Missing or insufficient permissions.
+[browser] [2026-05-02T12:54:57.297Z]  @firebase/firestore: Firestore (12.12.0): RestConnection RPC 'BatchGetDocuments' 0x107cfadd failed with error:  {"code":"permission-denied","name":"FirebaseError"} url:  https://firestore.googleapis.com/v1/projects/buzzly-4a038/databases/(default)/documents:batchGet?key=AIzaSyAJpIOSA5q4LldEn0eQP9a9ya_4xTHWcVQ request: {"documents":["projects/buzzly-4a038/databases/(default)/documents/dropCycles/1777726440000"]} (app/page.tsx:1974:32)
+[browser] [2026-05-02T12:55:57.170Z]  @firebase/firestore: Firestore (12.12.0): RestConnection RPC 'BatchGetDocuments' 0x107cfadf failed with error:  {"code":"permission-denied","name":"FirebaseError"} url:  https://firestore.googleapis.com/v1/projects/buzzly-4a038/databases/(default)/documents:batchGet?key=AIzaSyAJpIOSA5q4LldEn0eQP9a9ya_4xTHWcVQ request: {"documents":["projects/buzzly-4a038/databases/(default)/documents/dropCycles/1777726500000"]} (app/page.tsx:1974:32)
 [browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
 FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
-[browser] ⨯ unhandledRejection: FirebaseError: Missing or insufficient permissions.
-FirebaseError: Missing or insufficient permissions.
+[browser] Uncaught Error: Internal Next.js error: Router action dispatched before initialization.
+[browser] Uncaught Error: Internal Next.js error: Router action dispatched before initialization.
+[browser] Uncaught Error: Internal Next.js error: Router action dispatched before initialization.

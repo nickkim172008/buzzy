@@ -27,6 +27,7 @@ type AppTab = "markets" | "suggest" | "survey" | "create" | "drop" | "trading" |
 type ChartRange = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "ALL";
 type ChartMode = "value" | "returns";
 type UserRole = "admin" | "user";
+type NumericInput = number | "";
 
 type Asset = {
   id: string;
@@ -101,6 +102,7 @@ type Suggestion = {
   name: string;
   category: string;
   reason: string;
+  color: string;
   suggestedBy: string;
   suggestedByName: string;
   upvotes: number;
@@ -121,6 +123,7 @@ type UpcomingDrop = {
   rank: number;
   title: string;
   category: string;
+  color: string;
   votes: number;
   releaseAt: number;
   status: "Dropping next" | "Scheduled";
@@ -181,6 +184,8 @@ const ADMIN_EMAIL = "nutakkiabhiram@gmail.com";
 const DROP_PURCHASE_LIMIT_PERCENT = 0.05;
 const DROP_BATCH_SIZE = 3;
 const DROP_CYCLE_MS = 60 * 1000;
+const SCHEDULED_DROP_PRICE = 10;
+const SCHEDULED_DROP_SUPPLY = 100;
 const chartRanges: ChartRange[] = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"];
 
 const tabs: { id: AppTab; label: string; mark: string }[] = [
@@ -311,12 +316,16 @@ function dropPurchaseLimit(asset: Pick<Asset, "totalSupply">) {
   return Math.max(1, Math.floor(asset.totalSupply * DROP_PURCHASE_LIMIT_PERCENT));
 }
 
-function plannedDropSupply(suggestion: Pick<Suggestion, "upvotes">) {
-  return Math.max(100, 500 + suggestion.upvotes * 50);
+function numericInputValue(value: NumericInput, fallback = 0) {
+  return value === "" ? fallback : value;
 }
 
-function plannedDropPrice(suggestion: Pick<Suggestion, "upvotes">) {
-  return Math.max(1, 10 + suggestion.upvotes);
+function plannedDropSupply() {
+  return SCHEDULED_DROP_SUPPLY;
+}
+
+function plannedDropPrice() {
+  return SCHEDULED_DROP_PRICE;
 }
 
 function nextHourlyDropTime(timestamp: number) {
@@ -677,18 +686,29 @@ function DropTimerBadge({
   now: number;
   scheduledCount: number;
 }) {
+  const remainingMs = Math.max(0, nextDropTime - now);
+  const isFinalCountdown = remainingMs > 0 && remainingMs <= 4_000;
+
   return (
     <button
       type="button"
-      className="w-full rounded-2xl border border-brand/70 bg-surface px-4 py-3 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-lift sm:w-auto"
+      className={`w-full rounded-2xl border bg-surface px-4 py-3 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-lift sm:w-auto ${
+        isFinalCountdown ? "drop-timer-shake border-danger" : "border-brand/70"
+      }`}
       title="Drop Timer"
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-muted">Drop Timer</p>
-          <p className="mt-1 font-mono text-2xl font-black text-foreground">{formatClock(nextDropTime - now)}</p>
+          <p className={`text-xs font-black uppercase tracking-[0.14em] ${isFinalCountdown ? "text-danger" : "text-muted"}`}>
+            {isFinalCountdown ? "Dropping" : "Drop Timer"}
+          </p>
+          <p className={`mt-1 font-mono text-2xl font-black ${isFinalCountdown ? "text-danger" : "text-foreground"}`}>
+            {formatClock(remainingMs)}
+          </p>
         </div>
-        <span className="rounded-full bg-brand px-3 py-1 text-xs font-black text-foreground">
+        <span className={`rounded-full px-3 py-1 text-xs font-black ${
+          isFinalCountdown ? "bg-danger text-white" : "bg-brand text-foreground"
+        }`}>
           {scheduledCount}/{DROP_BATCH_SIZE}
         </span>
       </div>
@@ -882,24 +902,25 @@ export default function Home() {
   const [savedUserCoins, setSavedUserCoins] = useState<number | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [side, setSide] = useState<Side>("buy");
-  const [quantity, setQuantity] = useState(1);
-  const [limitPrice, setLimitPrice] = useState(1);
+  const [quantity, setQuantity] = useState<NumericInput>(1);
+  const [limitPrice, setLimitPrice] = useState<NumericInput>(1);
   const [coins, setCoins] = useState(STARTING_COINS);
   const [notice, setNotice] = useState("Ready.");
   const [marketName, setMarketName] = useState("");
   const [marketCategory, setMarketCategory] = useState("");
   const [marketLevel, setMarketLevel] = useState<MarketLevel>("community");
-  const [marketPrice, setMarketPrice] = useState(1);
-  const [marketSupply, setMarketSupply] = useState(1000);
+  const [marketPrice, setMarketPrice] = useState<NumericInput>(1);
+  const [marketSupply, setMarketSupply] = useState<NumericInput>(1000);
   const [marketColor, setMarketColor] = useState("#facc15");
   const [suggestionName, setSuggestionName] = useState("");
   const [suggestionCategory, setSuggestionCategory] = useState("Event");
   const [suggestionReason, setSuggestionReason] = useState("");
+  const [suggestionColor, setSuggestionColor] = useState("#facc15");
   const [surveySearch, setSurveySearch] = useState("");
   const [marketSearch, setMarketSearch] = useState("");
   const [dropSearch, setDropSearch] = useState("");
   const [tradeSearch, setTradeSearch] = useState("");
-  const [dropQuantity, setDropQuantity] = useState(1);
+  const [dropQuantity, setDropQuantity] = useState<NumericInput>(1);
   const [activeTab, setActiveTab] = useState<AppTab>("markets");
   const [chartRange, setChartRange] = useState<ChartRange>("1M");
   const [chartMode, setChartMode] = useState<ChartMode>("value");
@@ -1207,6 +1228,7 @@ export default function Home() {
             name: typeof data.name === "string" ? data.name : "",
             category: typeof data.category === "string" ? data.category : "",
             reason: typeof data.reason === "string" ? data.reason : "",
+            color: typeof data.color === "string" ? data.color : "#facc15",
             suggestedBy: typeof data.suggestedBy === "string" ? data.suggestedBy : "",
             suggestedByName: typeof data.suggestedByName === "string" ? data.suggestedByName : "",
             upvotes: typeof data.upvotes === "number" ? data.upvotes : 0,
@@ -1370,8 +1392,8 @@ export default function Home() {
 
     const cleanName = marketName.trim();
     const cleanCategory = marketCategory.trim();
-    const cleanPrice = Math.max(1, Math.floor(marketPrice));
-    const cleanSupply = Math.max(1, Math.floor(marketSupply));
+    const cleanPrice = Math.max(1, Math.floor(numericInputValue(marketPrice, 1)));
+    const cleanSupply = Math.max(1, Math.floor(numericInputValue(marketSupply, 1)));
 
     if (!cleanName || !cleanCategory) {
       setNotice("Name and category required.");
@@ -1456,6 +1478,7 @@ export default function Home() {
         name: cleanName,
         category: cleanCategory,
         reason: cleanReason,
+        color: suggestionColor,
         suggestedBy: authUser.uid,
         suggestedByName: accountName,
         upvotes: 1,
@@ -1467,6 +1490,7 @@ export default function Home() {
       setSuggestionName("");
       setSuggestionCategory("Event");
       setSuggestionReason("");
+      setSuggestionColor("#facc15");
       setActiveTab("survey");
       setNotice("Suggestion added to voting.");
     } catch (error) {
@@ -1539,7 +1563,7 @@ export default function Home() {
       return;
     }
 
-    const cleanQuantity = Math.max(1, Math.floor(dropQuantity));
+    const cleanQuantity = Math.max(1, Math.floor(numericInputValue(dropQuantity, 1)));
     const userDropLimit = dropPurchaseLimit(selectedAsset);
     const remainingUserLimit = Math.max(0, userDropLimit - selectedHolding.quantity);
     const buyQuantity = Math.min(cleanQuantity, selectedAsset.remainingDropSupply, remainingUserLimit);
@@ -2019,7 +2043,7 @@ export default function Home() {
     .filter((suggestion) => !skippedDropSuggestionIds.includes(suggestion.id))
     .slice(0, DROP_BATCH_SIZE);
   const upcomingDrops: UpcomingDrop[] = scheduledSuggestions.map((suggestion, index) => {
-    const plannedSupply = plannedDropSupply(suggestion);
+    const plannedSupply = plannedDropSupply();
 
     return {
       id: `scheduled-${suggestion.id}`,
@@ -2027,12 +2051,13 @@ export default function Home() {
       rank: rankedDropSuggestions.findIndex((item) => item.id === suggestion.id) + 1,
       title: suggestion.name,
       category: suggestion.category,
+      color: suggestion.color,
       votes: suggestion.upvotes,
       releaseAt: nextDropTime,
       status: index === 0 ? "Dropping next" : "Scheduled",
       limit: Math.max(1, Math.floor(plannedSupply * DROP_PURCHASE_LIMIT_PERCENT)),
       plannedSupply,
-      price: plannedDropPrice(suggestion),
+      price: plannedDropPrice(),
     };
   });
 
@@ -2094,7 +2119,7 @@ export default function Home() {
             status: "drop",
             description: `Dropped from Vote with ${drop.votes} votes.`,
             signal: "Vote ranked",
-            color: "#facc15",
+            color: drop.color,
             source: "scheduled_drop",
             createdBy: authUser.uid,
             createdByName: accountName,
@@ -2176,8 +2201,8 @@ export default function Home() {
 
     const tradeAssetId = selectedAsset.id;
     const currentUserId = authUser.uid;
-    const cleanQuantity = Math.max(1, Math.floor(quantity));
-    const cleanLimit = Math.max(1, Math.floor(limitPrice));
+    const cleanQuantity = Math.max(1, Math.floor(numericInputValue(quantity, 1)));
+    const cleanLimit = Math.max(1, Math.floor(numericInputValue(limitPrice, 1)));
     const createdAt = Math.floor(performance.timeOrigin + event.timeStamp);
 
     if (side === "buy" && cleanQuantity * cleanLimit > coins) {
@@ -2653,7 +2678,7 @@ export default function Home() {
                   Price
                   <input
                     value={marketPrice}
-                    onChange={(event) => setMarketPrice(Number(event.target.value))}
+                    onChange={(event) => setMarketPrice(event.target.value === "" ? "" : Number(event.target.value))}
                     min={1}
                     type="number"
                     className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-foreground outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
@@ -2663,7 +2688,7 @@ export default function Home() {
                   Supply
                   <input
                     value={marketSupply}
-                    onChange={(event) => setMarketSupply(Number(event.target.value))}
+                    onChange={(event) => setMarketSupply(event.target.value === "" ? "" : Number(event.target.value))}
                     min={1}
                     type="number"
                     className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-foreground outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
@@ -2698,7 +2723,6 @@ export default function Home() {
                 <input
                   value={suggestionName}
                   onChange={(event) => setSuggestionName(event.target.value)}
-                  placeholder="GTA 6 trailer hype"
                   className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-foreground outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
                 />
               </label>
@@ -2709,7 +2733,7 @@ export default function Home() {
                   onChange={(event) => setSuggestionCategory(event.target.value)}
                   className="mt-2 w-full rounded-2xl border border-border bg-surface px-4 py-3 text-foreground outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
                 >
-                  {["Event", "Product", "Music", "Public Figure", "Sports", "Meme", "Private"].map((category) => (
+                  {["Event", "Product", "Music", "Public Figure", "Sports", "Meme", "Miscellaneous"].map((category) => (
                     <option key={category} value={category}>
                       {category}
                     </option>
@@ -2717,11 +2741,19 @@ export default function Home() {
                 </select>
               </label>
               <label className="text-sm font-bold text-muted">
+                Color
+                <input
+                  value={suggestionColor}
+                  onChange={(event) => setSuggestionColor(event.target.value)}
+                  type="color"
+                  className="mt-2 h-12 w-16 rounded-2xl border border-border bg-surface p-1"
+                />
+              </label>
+              <label className="text-sm font-bold text-muted">
                 Why should this be a drop?
                 <textarea
                   value={suggestionReason}
                   onChange={(event) => setSuggestionReason(event.target.value)}
-                  placeholder="People are already talking about it, and the hype could move fast."
                   rows={4}
                   className="mt-2 w-full resize-none rounded-2xl border border-border px-4 py-3 text-foreground outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
                 />
@@ -2771,6 +2803,7 @@ export default function Home() {
                               #{index + 1}
                             </span>
                             <h3 className="truncate text-lg font-bold">{suggestion.name}</h3>
+                            <span className="h-6 w-6 rounded-xl border border-border" style={{ background: suggestion.color }} />
                             <span className="rounded-full bg-surface px-2 py-1 text-xs font-bold text-muted">
                               {suggestion.category}
                             </span>
@@ -3115,7 +3148,7 @@ export default function Home() {
                       Quantity
                       <input
                         value={dropQuantity}
-                        onChange={(event) => setDropQuantity(Number(event.target.value))}
+                        onChange={(event) => setDropQuantity(event.target.value === "" ? "" : Number(event.target.value))}
                         min={1}
                         max={Math.min(visibleAsset.remainingDropSupply, selectedDropLimitRemaining)}
                         type="number"
@@ -3124,10 +3157,10 @@ export default function Home() {
                     </label>
                     <div className="rounded-2xl bg-surface-warm p-3 text-sm leading-6 text-muted">
                       <p>Price: {currency(visibleAsset.dropPrice)}</p>
-                      <p>Total: {currency(Math.min(dropQuantity, selectedDropLimitRemaining, visibleAsset.remainingDropSupply) * visibleAsset.dropPrice)}</p>
+                      <p>Total: {currency(Math.min(numericInputValue(dropQuantity), selectedDropLimitRemaining, visibleAsset.remainingDropSupply) * visibleAsset.dropPrice)}</p>
                       <p>Limit: 5% per user ({dropPurchaseLimit(visibleAsset)} max)</p>
                       <p>Remaining: {visibleAsset.unsoldDropSupply}</p>
-                      <p>Tradable after purchase: {visibleAsset.activeTradableSupply + Math.min(dropQuantity, selectedDropLimitRemaining, visibleAsset.remainingDropSupply)}</p>
+                      <p>Tradable after purchase: {visibleAsset.activeTradableSupply + Math.min(numericInputValue(dropQuantity), selectedDropLimitRemaining, visibleAsset.remainingDropSupply)}</p>
                     </div>
                   </div>
                   <div className="mt-4 rounded-2xl border border-border p-3">
@@ -3187,7 +3220,7 @@ export default function Home() {
                     Quantity
                     <input
                       value={quantity}
-                      onChange={(event) => setQuantity(Number(event.target.value))}
+                      onChange={(event) => setQuantity(event.target.value === "" ? "" : Number(event.target.value))}
                       min={1}
                       type="number"
                       className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-base outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
@@ -3197,7 +3230,7 @@ export default function Home() {
                     Limit price
                     <input
                       value={limitPrice}
-                      onChange={(event) => setLimitPrice(Number(event.target.value))}
+                      onChange={(event) => setLimitPrice(event.target.value === "" ? "" : Number(event.target.value))}
                       min={1}
                       type="number"
                       className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-base outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/30"
@@ -3209,7 +3242,7 @@ export default function Home() {
                   <p>Best bid: {bestBid ? currency(bestBid) : "none"}</p>
                   <p>Best ask: {bestAsk ? currency(bestAsk) : "none"}</p>
                   <p>Active tradable supply: {visibleAsset.activeTradableSupply}</p>
-                  <p>Estimated max value: {currency(quantity * limitPrice)}</p>
+                  <p>Estimated max value: {currency(numericInputValue(quantity) * numericInputValue(limitPrice))}</p>
                   <p>Your shares: {selectedHolding.quantity}</p>
                 </div>
 
@@ -3385,12 +3418,6 @@ export default function Home() {
                     <p className="text-sm font-semibold text-muted">Daily change</p>
                     <p className={`text-lg font-black ${dashboardChange >= 0 ? "text-positive" : "text-danger"}`}>{formatPercent(dashboardChange)}</p>
                   </div>
-                  <button
-                    onClick={() => setActiveTab("suggest")}
-                    className="rounded-2xl bg-brand px-4 py-2 text-sm font-black text-foreground transition hover:bg-brand-hover"
-                  >
-                    Get coins
-                  </button>
                 </div>
               </div>
 
