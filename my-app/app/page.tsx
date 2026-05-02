@@ -745,6 +745,7 @@ function DropTimingCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 pr-9">
+            <span className="h-6 w-6 shrink-0 rounded-xl border border-border" style={{ background: drop.color }} />
             <span className="rounded-full bg-brand px-2 py-1 text-xs font-black text-foreground">#{drop.rank}</span>
             <p className="truncate text-xl font-black">{drop.title}</p>
           </div>
@@ -2964,9 +2965,12 @@ export default function Home() {
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-black">{asset.name}</p>
-                            <p className="mt-1 text-sm text-muted">{asset.category}</p>
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="mt-0.5 h-7 w-7 shrink-0 rounded-xl border border-border" style={{ background: asset.color }} />
+                            <div className="min-w-0">
+                              <p className="truncate font-black">{asset.name}</p>
+                              <p className="mt-1 text-sm text-muted">{asset.category}</p>
+                            </div>
                           </div>
                           <span className="rounded-full bg-brand px-2 py-1 text-xs font-black">Live</span>
                         </div>
