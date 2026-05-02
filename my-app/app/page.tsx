@@ -46,6 +46,7 @@ type Order = {
   assetId: string;
   userId: string;
   user: string;
+  ownerCoins: number;
   side: Side;
   limitPrice: number;
   quantity: number;
@@ -391,6 +392,7 @@ export default function Home() {
             assetId: typeof data.assetId === "string" ? data.assetId : "",
             userId: typeof data.userId === "string" ? data.userId : "",
             user: typeof data.user === "string" ? data.user : "",
+            ownerCoins: typeof data.ownerCoins === "number" ? data.ownerCoins : 0,
             side: data.side === "sell" ? "sell" : "buy",
             limitPrice: typeof data.limitPrice === "number" ? data.limitPrice : 1,
             quantity: typeof data.quantity === "number" ? data.quantity : 0,
@@ -978,6 +980,7 @@ export default function Home() {
       assetId: tradeAssetId,
       userId: authUser.uid,
       user: accountName,
+      ownerCoins: coins,
       side,
       limitPrice: cleanLimit,
       quantity: cleanQuantity,
@@ -1001,9 +1004,9 @@ export default function Home() {
     let remaining = cleanQuantity;
     let nextCoins = coins;
 
-    function getAccount(userId: string, fallbackName: string) {
+    function getAccount(userId: string, fallbackName: string, fallbackCoins = 0) {
       accountUpdates[userId] ??= publicBalances[userId] ?? {
-        coins: 0,
+        coins: fallbackCoins,
         displayName: fallbackName,
         email: "",
       };
@@ -1045,7 +1048,7 @@ export default function Home() {
         remaining -= tradeQuantity;
         nextCoins += refund;
         getAccount(authUser.uid, accountName).coins = nextCoins;
-        getAccount(match.userId, match.user).coins += total;
+        getAccount(match.userId, match.user, match.ownerCoins).coins += total;
         getHolding(match.userId);
         nextHoldings[tradeAssetId] = applyTradeToHolding(nextHoldings[tradeAssetId], tradeQuantity, tradePrice);
         const buyerHolding = getHolding(authUser.uid);
@@ -1092,7 +1095,7 @@ export default function Home() {
         remaining -= tradeQuantity;
         nextCoins += tradeQuantity * tradePrice;
         getAccount(authUser.uid, accountName).coins = nextCoins;
-        getAccount(match.userId, match.user);
+        getAccount(match.userId, match.user, match.ownerCoins);
         const buyerHolding = getHolding(match.userId);
         const updatedBuyerHolding = applyTradeToHolding(buyerHolding, tradeQuantity, tradePrice);
         buyerHolding.quantity = updatedBuyerHolding.quantity;
@@ -1140,6 +1143,7 @@ export default function Home() {
           assetId: incoming.assetId,
           userId: incoming.userId,
           user: incoming.user,
+          ownerCoins: incoming.ownerCoins,
           side: incoming.side,
           limitPrice: incoming.limitPrice,
           quantity: incoming.quantity,

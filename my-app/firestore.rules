@@ -115,6 +115,7 @@ service cloud.firestore {
           "assetId",
           "userId",
           "user",
+          "ownerCoins",
           "side",
           "limitPrice",
           "quantity",
@@ -126,6 +127,9 @@ service cloud.firestore {
         && request.resource.data.assetId is string
         && request.resource.data.userId is string
         && request.resource.data.user is string
+        && (!request.resource.data.keys().hasAny(["ownerCoins"])
+          || (request.resource.data.ownerCoins is number
+            && request.resource.data.ownerCoins >= 0))
         && request.resource.data.side in ["buy", "sell"]
         && request.resource.data.limitPrice is number
         && request.resource.data.limitPrice >= 1
