@@ -8,10 +8,6 @@ The platform simulates a market-driven economy where users buy into assets they 
 
 https://buzzly-zeta.vercel.app
 
-## Repository
-
-https://github.com/nickkim172008/buzzly
-
 ## Tech Stack
 
 - **Framework:** Next.js
